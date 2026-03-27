@@ -1,0 +1,157 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile, earnings, and referral data",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Unique user ID" },
+        "email": { "type": "string", "format": "email", "description": "User email address" },
+        "displayName": { "type": "string", "description": "User display name" },
+        "firstName": { "type": "string", "description": "User first name" },
+        "lastName": { "type": "string", "description": "User last name" },
+        "userName": { "type": "string", "description": "User unique username" },
+        "phoneNumber": { "type": "string", "description": "User phone number" },
+        "photoURL": { "type": "string", "description": "User profile picture URL" },
+        "userId": { "type": "string", "description": "Sequential user ID (e.g., 00000001)" },
+        "address": { "type": "string", "description": "User physical address" },
+        "level": { "type": "number", "description": "User referral level" },
+        "balance": { "type": "number", "description": "Current earnings balance" },
+        "totalEarned": { "type": "number", "description": "Total earnings" },
+        "jobEarnings": { "type": "number", "description": "Earnings from jobs" },
+        "inviteEarnings": { "type": "number", "description": "Earnings from invites" },
+        "salaryEarnings": { "type": "number", "description": "Earnings from salary" },
+        "gmailEarnings": { "type": "number", "description": "Earnings from Gmail" },
+        "telegramEarnings": { "type": "number", "description": "Earnings from Telegram" },
+        "facebookEarnings": { "type": "number", "description": "Earnings from Facebook" },
+        "instagramEarnings": { "type": "number", "description": "Earnings from Instagram" },
+        "marketingEarnings": { "type": "number", "description": "Earnings from Marketing" },
+        "adsEarnings": { "type": "number", "description": "Earnings from Ads" },
+        "totalWithdraw": { "type": "number", "description": "Total withdrawn amount" },
+        "role": { "type": "string", "enum": ["admin", "user"], "description": "User role" },
+        "referralCode": { "type": "string", "description": "User's own referral code" },
+        "referredBy": { "type": "string", "description": "Referral code of the user who invited them" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Account creation timestamp" }
+      },
+      "required": ["uid", "email", "balance", "role", "referralCode"]
+    },
+    "Mission": {
+      "title": "Mission",
+      "description": "Available tasks for users to complete",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Mission ID" },
+        "title": { "type": "string", "description": "Mission title" },
+        "description": { "type": "string", "description": "Detailed task instructions" },
+        "reward": { "type": "number", "description": "Reward amount for completion" },
+        "status": { "type": "string", "enum": ["active", "inactive"], "description": "Mission availability" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
+      },
+      "required": ["title", "description", "reward", "status"]
+    },
+    "Submission": {
+      "title": "Submission",
+      "description": "User mission completion proof",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Submission ID" },
+        "missionId": { "type": "string", "description": "Linked mission ID" },
+        "userId": { "type": "string", "description": "User who submitted" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"], "description": "Review status" },
+        "proof": { "type": "string", "description": "Proof of completion (text or link)" },
+        "submittedAt": { "type": "string", "format": "date-time", "description": "Submission timestamp" }
+      },
+      "required": ["missionId", "userId", "status", "proof"]
+    },
+    "Withdrawal": {
+      "title": "Withdrawal",
+      "description": "User payout request",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Withdrawal ID" },
+        "userId": { "type": "string", "description": "User requesting payout" },
+        "amount": { "type": "number", "description": "Requested amount" },
+        "status": { "type": "string", "enum": ["pending", "completed", "rejected"], "description": "Payout status" },
+        "method": { "type": "string", "description": "Payment method details" },
+        "requestedAt": { "type": "string", "format": "date-time", "description": "Request timestamp" }
+      },
+      "required": ["userId", "amount", "status", "method"]
+    },
+    "ActivationRequest": {
+      "title": "ActivationRequest",
+      "description": "User account activation request",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Request ID" },
+        "userId": { "type": "string", "description": "User requesting activation" },
+        "method": { "type": "string", "enum": ["bKash", "Nagad", "Rocket"], "description": "Payment method" },
+        "paymentNumber": { "type": "string", "description": "Number paid from" },
+        "amount": { "type": "number", "description": "Amount paid" },
+        "transactionId": { "type": "string", "description": "Transaction ID" },
+        "screenshot": { "type": "string", "description": "Proof screenshot URL" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"], "description": "Request status" },
+        "submittedAt": { "type": "string", "format": "date-time", "description": "Submission timestamp" }
+      },
+      "required": ["userId", "method", "paymentNumber", "amount", "transactionId", "status"]
+    },
+    "PaymentSettings": {
+      "title": "PaymentSettings",
+      "description": "Admin-configurable payment numbers",
+      "type": "object",
+      "properties": {
+        "bKash": { "type": "string", "description": "Active bKash number" },
+        "Nagad": { "type": "string", "description": "Active Nagad number" },
+        "Rocket": { "type": "string", "description": "Active Rocket number" },
+        "activationFee": { "type": "number", "description": "Fixed activation fee" }
+      },
+      "required": ["bKash", "Nagad", "Rocket", "activationFee"]
+    },
+    "UsedTransactionId": {
+      "title": "UsedTransactionId",
+      "description": "Tracking for unique transaction IDs",
+      "type": "object",
+      "properties": {
+        "usedAt": { "type": "string", "format": "date-time", "description": "When the ID was used" },
+        "userId": { "type": "string", "description": "User who used the ID" }
+      },
+      "required": ["usedAt", "userId"]
+    },
+    "GiftCode": {
+      "title": "GiftCode",
+      "description": "Gift codes for users to redeem",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Gift code ID" },
+        "code": { "type": "string", "description": "The gift code string" },
+        "amount": { "type": "number", "description": "Amount the code gives" },
+        "maxUses": { "type": "number", "description": "Maximum number of uses" },
+        "usedCount": { "type": "number", "description": "Number of times used" },
+        "usedBy": { "type": "array", "items": { "type": "string" }, "description": "List of user UIDs who used the code" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
+      },
+      "required": ["code", "amount", "maxUses", "usedCount", "usedBy", "createdAt"]
+    },
+    "LevelConfig": {
+      "title": "LevelConfig",
+      "description": "Configuration for referral levels",
+      "type": "object",
+      "properties": {
+        "level": { "type": "number", "description": "Level number" },
+        "minReferrals": { "type": "number", "description": "Minimum referrals for this level" }
+      },
+      "required": ["level", "minReferrals"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": { "schema": "User", "description": "User profiles" },
+    "/missions/{missionId}": { "schema": "Mission", "description": "Available missions" },
+    "/submissions/{submissionId}": { "schema": "Submission", "description": "User mission submissions" },
+    "/withdrawals/{withdrawalId}": { "schema": "Withdrawal", "description": "User withdrawal requests" },
+    "/activationRequests/{requestId}": { "schema": "ActivationRequest", "description": "User activation requests" },
+    "/settings/paymentNumbers": { "schema": "PaymentSettings", "description": "Global payment settings" },
+    "/usedTransactionIds/{transactionId}": { "schema": "UsedTransactionId", "description": "Tracking for unique transaction IDs" },
+    "/counters/{counterId}": { "schema": "object", "description": "Sequential ID counters" },
+    "/giftCodes/{codeId}": { "schema": "GiftCode", "description": "Gift codes" },
+    "/levelConfigs/{levelId}": { "schema": "LevelConfig", "description": "Level configurations" }
+  }
+}

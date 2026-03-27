@@ -1,0 +1,172 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Fields: uid (string), email (string), displayName (string), balance (number), role (string), createdAt (string)
+    //
+    // Collection: missions
+    // Fields: id (string), title (string), description (string), reward (number), status (string), createdAt (string)
+    //
+    // Collection: submissions
+    // Fields: id (string), missionId (string), userId (string), status (string), proof (string), submittedAt (string)
+    //
+    // Collection: withdrawals
+    // Fields: id (string), userId (string), amount (number), status (string), method (string), requestedAt (string)
+    //
+    // Collection: activationRequests
+    // Fields: id (string), userId (string), method (string), paymentNumber (string), amount (number), transactionId (string), screenshot (string), status (string), submittedAt (string)
+    //
+    // Collection: settings
+    // Document: paymentNumbers
+    // Fields: bKash (string), Nagad (string), Rocket (string), activationFee (number)
+    //
+    // Collection: usedTransactionIds
+    // Document ID: transactionId
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "enigmaticshafin@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+    function isRecent(ts) {
+      return isValidDateString(ts) && 
+             (request.time - timestamp(ts)).seconds() < 300 && 
+             (request.time - timestamp(ts)).seconds() > -300;
+    }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string &&
+        dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+    }
+
+    function isValidUser(data) {
+      return data.uid is string && data.uid.size() > 0 &&
+             data.email is string && isValidEmail(data.email) &&
+             data.balance is number && data.balance >= 0 &&
+             data.role in ['admin', 'user'] &&
+             data.status in ['active', 'inactive', 'pending'] &&
+             data.referralCode is string && data.referralCode.size() > 0 &&
+             (!('referredBy' in data) || data.referredBy is string) &&
+             isValidDateString(data.createdAt);
+    }
+
+    function isValidMission(data) {
+      return data.title is string && data.title.size() > 0 && data.title.size() < 100 &&
+             data.description is string && data.description.size() > 0 && data.description.size() < 2000 &&
+             data.reward is number && data.reward >= 0 &&
+             data.status in ['active', 'inactive'] &&
+             isValidDateString(data.createdAt);
+    }
+
+    function isValidSubmission(data) {
+      return data.missionId is string && data.missionId.size() > 0 &&
+             data.userId is string && data.userId == request.auth.uid &&
+             data.status in ['pending', 'approved', 'rejected'] &&
+             data.proof is string && data.proof.size() > 0 && data.proof.size() < 1000 &&
+             isValidDateString(data.submittedAt);
+    }
+
+    function isValidWithdrawal(data) {
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.amount is number && data.amount > 0 &&
+             data.status in ['pending', 'completed', 'rejected'] &&
+             data.method is string && data.method.size() > 0 && data.method.size() < 500 &&
+             isValidDateString(data.requestedAt);
+    }
+
+    function isValidActivationRequest(data) {
+      let settings = get(/databases/$(database)/documents/settings/paymentNumbers).data;
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.method in ['bKash', 'Nagad', 'Rocket'] &&
+             data.paymentNumber is string && data.paymentNumber.size() > 0 && data.paymentNumber.size() < 20 &&
+             data.amount is number && data.amount == settings.activationFee &&
+             data.transactionId is string && data.transactionId.size() > 0 && data.transactionId.size() < 50 &&
+             (!('screenshot' in data) || (data.screenshot is string && data.screenshot.size() < 1000)) &&
+             data.status in ['pending', 'approved', 'rejected'] &&
+             isValidDateString(data.submittedAt) &&
+             // Enforce uniqueness of transactionId via usedTransactionIds collection
+             !exists(/databases/$(database)/documents/usedTransactionIds/$(data.transactionId)) &&
+             getAfter(/databases/$(database)/documents/usedTransactionIds/$(data.transactionId)) != null;
+    }
+
+    function isValidPaymentSettings(data) {
+      return data.bKash is string && data.bKash.size() > 0 &&
+             data.Nagad is string && data.Nagad.size() > 0 &&
+             data.Rocket is string && data.Rocket.size() > 0 &&
+             data.activationFee is number && data.activationFee >= 0;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data) && 
+                    (request.auth.token.email == "enigmaticshafin@gmail.com" || ('referredBy' in request.resource.data && request.resource.data.referredBy.size() > 0));
+      allow update: if isAdmin() || (isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.role == resource.data.role && request.resource.data.balance == resource.data.balance);
+    }
+
+    match /missions/{missionId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() && isValidMission(request.resource.data);
+    }
+
+    match /submissions/{submissionId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow create: if isAuthenticated() && isValidSubmission(request.resource.data) && request.resource.data.status == 'pending';
+      allow update: if isAdmin() && isValidSubmission(request.resource.data);
+    }
+
+    match /withdrawals/{withdrawalId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow create: if isAuthenticated() && isValidWithdrawal(request.resource.data) && request.resource.data.status == 'pending';
+      allow update: if isAdmin() && isValidWithdrawal(request.resource.data);
+    }
+
+    match /activationRequests/{requestId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow create: if isAuthenticated() && isValidActivationRequest(request.resource.data) && request.resource.data.status == 'pending';
+      allow update: if isAdmin() && isValidActivationRequest(request.resource.data);
+    }
+
+    match /settings/paymentNumbers {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() && isValidPaymentSettings(request.resource.data);
+    }
+
+    match /usedTransactionIds/{transactionId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && !exists(/databases/$(database)/documents/usedTransactionIds/$(transactionId));
+    }
+  }
+}
