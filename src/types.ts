@@ -121,3 +121,35 @@ export interface LevelConfig {
   name: string;
   minReferrals: number;
 }
+
+export interface SocialSellSubmission {
+  id: string;
+  userId: string;
+  userName?: string;
+  userSequentialId?: string;
+  type: 'Facebook' | 'Gmail' | 'Instagram' | 'Telegram';
+  platform?: string; // Alias for type used in some parts
+  status: 'pending' | 'approved' | 'rejected';
+  submittedAt: string;
+  // Facebook/Instagram fields
+  name?: string;
+  idName?: string; // Alias for name
+  username?: string;
+  email?: string;
+  password?: string;
+  twoFactor?: string;
+  screenshot?: string;
+  // Gmail fields
+  gmail?: string;
+}
+
+export interface DynamicSettings {
+  telegramGroup: string;
+  telegramChannel: string;
+  telegramSupport: string;
+  meetingGroup: string;
+  welcomeTitle: string;
+  welcomeText: string;
+  footerQuote: string;
+  quoteAuthor: string;
+}

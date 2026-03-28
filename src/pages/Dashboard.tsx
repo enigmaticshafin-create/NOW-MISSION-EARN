@@ -30,10 +30,10 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, getDocs, where, addDoc, doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
+import { collection, query, getDocs, where, addDoc, doc, getDoc, updateDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
-import { Mission, MissionSubmission, PaymentSettings } from '../types';
+import { Mission, MissionSubmission, PaymentSettings, DynamicSettings } from '../types';
 
 export function Dashboard() {
   const { user, profile, loading: authLoading } = useAuth();
@@ -49,9 +49,29 @@ export function Dashboard() {
   const [screenshot, setScreenshot] = useState<File | null>(null);
   const [isActivating, setIsActivating] = useState(false);
   const [paymentSettings, setPaymentSettings] = useState<PaymentSettings | null>(null);
+  const [dynamicSettings, setDynamicSettings] = useState<DynamicSettings | null>(null);
+  const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+
+  useEffect(() => {
+    // Listen to dynamic settings
+    const unsubscribe = onSnapshot(doc(db, 'dynamicSettings', 'main'), (doc) => {
+      if (doc.exists()) {
+        setDynamicSettings(doc.data() as DynamicSettings);
+      }
+    }, (error) => {
+      console.error("Error listening to dynamic settings:", error);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
       try {
         const missionsQuery = query(collection(db, 'missions'), where('status', '==', 'active'));
         const missionsSnap = await getDocs(missionsQuery);
@@ -63,12 +83,10 @@ export function Dashboard() {
           setPaymentSettings(settingsDoc.data() as PaymentSettings);
         }
 
-        if (user) {
-          const submissionsQuery = query(collection(db, 'missionSubmissions'), where('userId', '==', user.uid));
-          const submissionsSnap = await getDocs(submissionsQuery);
-          const submissionsData = submissionsSnap.docs.map(doc => doc.data() as MissionSubmission);
-          setSubmissions(submissionsData);
-        }
+        const submissionsQuery = query(collection(db, 'missionSubmissions'), where('userId', '==', user.uid));
+        const submissionsSnap = await getDocs(submissionsQuery);
+        const submissionsData = submissionsSnap.docs.map(doc => doc.data() as MissionSubmission);
+        setSubmissions(submissionsData);
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
       } finally {
@@ -87,13 +105,13 @@ export function Dashboard() {
           const updates: any = {};
           
           // Ensure admin has a userId
-          if (!profile.userId) {
+          if (!profile.userId || profile.userId.length < 8) {
             updates.userId = "00000001";
           }
           
           // Change referralCode from "ADMIN" to userId if it's "ADMIN" or missing
-          if (!profile.referralCode || profile.referralCode === "ADMIN") {
-            updates.referralCode = profile.userId || "00000001";
+          if (!profile.referralCode || profile.referralCode === "ADMIN" || profile.referralCode.length < 8) {
+            updates.referralCode = updates.userId || profile.userId || "00000001";
           }
           
           if (Object.keys(updates).length > 0) {
@@ -129,10 +147,10 @@ export function Dashboard() {
       }
     };
     fixAdminProfile();
-  }, [user, profile]);
+  }, [user, profile?.userId, profile?.referralCode]);
 
   const copyReferralLink = () => {
-    const baseUrl = window.location.origin.includes('localhost') ? window.location.origin : 'https://now-mission-earn.vercel.app';
+    const baseUrl = window.location.origin;
     const link = `${baseUrl}/register?referBy=${profile?.referralCode ? profile.referralCode : (profile?.userId ? profile.userId : '')}`;
     navigator.clipboard.writeText(link);
     alert('Referral link copied to clipboard!');
@@ -186,10 +204,10 @@ export function Dashboard() {
   ];
 
   const telegramLinks = [
-    { name: 'Join Telegram Group', icon: Send, color: 'bg-sky-500', url: '#' },
-    { name: 'Join Telegram Channel', icon: Send, color: 'bg-sky-500', url: '#' },
-    { name: 'Join Private Support', icon: Send, color: 'bg-sky-500', url: '#' },
-    { name: 'Join meeting Group', icon: Send, color: 'bg-sky-500', url: '#' },
+    { name: 'Join Telegram Group', icon: Send, color: 'bg-sky-500', url: dynamicSettings?.telegramGroup || '#' },
+    { name: 'Join Telegram Channel', icon: Send, color: 'bg-sky-500', url: dynamicSettings?.telegramChannel || '#' },
+    { name: 'Join Private Support', icon: Send, color: 'bg-sky-500', url: dynamicSettings?.telegramSupport || '#' },
+    { name: 'Join meeting Group', icon: Send, color: 'bg-sky-500', url: dynamicSettings?.meetingGroup || '#' },
   ];
 
   if (loading || authLoading) {
@@ -245,7 +263,7 @@ export function Dashboard() {
       </div>
 
       {/* Activation Alert */}
-      {profile?.status !== 'active' && (
+      {profile?.status !== 'active' ? (
         <div className={cn(
           "rounded-[2rem] p-10 border text-center space-y-6",
           theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
@@ -258,6 +276,21 @@ export function Dashboard() {
             className="bg-blue-600 text-white px-12 py-3 rounded-xl font-black uppercase tracking-widest shadow-lg shadow-blue-600/20 hover:scale-[1.02] transition-all"
           >
             Click here
+          </button>
+        </div>
+      ) : (
+        <div className={cn(
+          "rounded-[2rem] p-10 border text-center space-y-6",
+          theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
+        )}>
+          <h3 className="text-xl font-black tracking-tight italic text-emerald-500">
+            আপনার অ্যাকাউন্টটি একটিভ আছে! কাজ শুরু করতে নিচের বাটনে ক্লিক করুন।
+          </h3>
+          <button 
+            onClick={() => navigate('/my-jobs')}
+            className="bg-emerald-600 text-white px-12 py-3 rounded-xl font-black uppercase tracking-widest shadow-lg shadow-emerald-600/20 hover:scale-[1.02] transition-all"
+          >
+            Start Working
           </button>
         </div>
       )}
@@ -284,7 +317,7 @@ export function Dashboard() {
             <input 
               type="text" 
               readOnly 
-              value={`${window.location.origin.includes('localhost') ? window.location.origin : 'https://now-mission-earn.vercel.app'}/register?referBy=${profile?.referralCode ? profile.referralCode : (profile?.userId ? profile.userId : '')}`}
+              value={`${window.location.origin}/register?referBy=${profile?.referralCode ? profile.referralCode : (profile?.userId ? profile.userId : '')}`}
               className={cn(
                 "w-full px-6 py-4 rounded-xl border font-bold text-center text-sm",
                 theme === 'dark' ? "bg-[#0a0b14] border-[#303456] text-slate-400" : "bg-slate-50 border-slate-200 text-slate-600"
@@ -327,14 +360,14 @@ export function Dashboard() {
         "rounded-[2rem] p-12 border text-center space-y-6",
         theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
       )}>
-        <h2 className="text-3xl font-black tracking-tight italic uppercase">Welcome to our website</h2>
+        <h2 className="text-3xl font-black tracking-tight italic uppercase">{dynamicSettings?.welcomeTitle || "Welcome to our website"}</h2>
         <p className={cn(
-          "text-lg font-medium leading-relaxed max-w-4xl mx-auto",
+          "text-lg font-medium leading-relaxed max-w-4xl mx-auto whitespace-pre-wrap",
           theme === 'dark' ? "text-slate-400" : "text-slate-600"
         )}>
-          নিভৃত আঁধারে ল্যাপটপের নীলচে আলোয় যখন তুমি একা জেগে থাকো, তখন আসলে তোমার চারপাশ ঘিরে স্বপ্নরা ডানা মেলে। পৃথিবীর মানুষ তোমার সেই দীর্ঘ অপেক্ষার প্রহর দেখে না, তারা জানে না পর্দার আড়ালে লুকিয়ে থাকা তোমার ক্লান্ত চোখের ত্যাগের আখ্যান। কিন্তু বিশ্বাস হারিও না; তোমার ধৈর্যের প্রতিটি মুহূর্ত আর মেধার একেকটি নিপুণ ‘ক্লিক’ নিঃশব্দে বুনে চলেছে আগামীর নতুন এক রূপকথা। আজকের এই নিভৃত পরিশ্রমই একদিন বদলে দেবে তোমার পুরো পৃথিবী।
+          {dynamicSettings?.welcomeText || "নিভৃত আঁধারে ল্যাপটপের নীলচে আলোয় যখন তুমি একা জেগে থাকো, তখন আসলে তোমার চারপাশ ঘিরে স্বপ্নরা ডানা মেলে। পৃথিবীর মানুষ তোমার সেই দীর্ঘ অপেক্ষার প্রহর দেখে না, তারা জানে না পর্দার আড়ালে লুকিয়ে থাকা তোমার ক্লান্ত চোখের ত্যাগের আখ্যান। কিন্তু বিশ্বাস হারিও না; তোমার ধৈর্যের প্রতিটি মুহূর্ত আর মেধার একেকটি নিপুণ ‘ক্লিক’ নিঃশব্দে বুনে চলেছে আগামীর নতুন এক রূপকথা। আজকের এই নিভৃত পরিশ্রমই একদিন বদলে দেবে তোমার পুরো পৃথিবী।"}
         </p>
-        <p className="text-pink-500 font-black uppercase tracking-widest">_ Shoaiba Islam</p>
+        <p className="text-pink-500 font-black uppercase tracking-widest">_ {dynamicSettings?.quoteAuthor || "Shoaiba Islam"}</p>
       </div>
 
       {/* Footer */}
@@ -345,7 +378,7 @@ export function Dashboard() {
         <div className="space-y-6">
           <h4 className="text-xl font-black tracking-tight uppercase">About Our website</h4>
           <p className="text-sm font-medium text-slate-500 leading-relaxed">
-            This should be used to tell a story and include any friend you might receive money and service for your teams.
+            {dynamicSettings?.footerQuote || "This should be used to tell a story and include any friend you might receive money and service for your teams."}
           </p>
         </div>
 
@@ -400,7 +433,7 @@ export function Dashboard() {
       </footer>
 
       <div className="text-center text-xs font-bold text-slate-500 pb-8">
-        © 2026 All Rights Reserved — Digital Nova
+        © {new Date().getFullYear()} All Rights Reserved — Digital Nova
       </div>
 
       {/* Activation Modal */}
@@ -465,7 +498,7 @@ export function Dashboard() {
                                  paymentSettings?.Rocket;
                       if (num) {
                         navigator.clipboard.writeText(num);
-                        alert('Number copied!');
+                        setMessage({ type: 'success', text: 'Number copied!' });
                       }
                     }}
                     className="p-2 bg-pink-500/10 text-pink-500 rounded-lg hover:bg-pink-500 hover:text-white transition-all"
@@ -536,6 +569,19 @@ export function Dashboard() {
               </form>
             </div>
           </div>
+        </div>
+      )}
+      {/* Toast Message */}
+      {message && (
+        <div className={cn(
+          "fixed bottom-20 left-1/2 -translate-x-1/2 px-6 py-3 rounded-2xl shadow-lg flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 z-[100]",
+          message.type === 'success' ? "bg-emerald-600 text-white" : "bg-red-600 text-white"
+        )}>
+          {message.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+          <span className="font-medium">{message.text}</span>
+          <button onClick={() => setMessage(null)} className="ml-2 opacity-50 hover:opacity-100">
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
     </div>

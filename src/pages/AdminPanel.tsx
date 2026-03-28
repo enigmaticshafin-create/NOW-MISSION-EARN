@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { db, auth } from '../firebase';
 import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, increment, runTransaction, query, orderBy } from 'firebase/firestore';
-import { Mission, MissionSubmission, Withdrawal, UserProfile, ActivationRequest, PaymentSettings, GiftCode, LevelConfig, DepositRequest } from '../types';
+import { Mission, MissionSubmission, Withdrawal, UserProfile, ActivationRequest, PaymentSettings, GiftCode, LevelConfig, DepositRequest, SocialSellSubmission, DynamicSettings } from '../types';
 import { 
   Plus, Check, X, Users as UsersIcon, ListTodo, Landmark, Eye, 
   ShieldCheck, AlertCircle, Clock, CheckCircle2, TrendingUp, 
   UserPlus, Ban, Search, Filter, ArrowUpRight, History, Trash2, Edit3, ExternalLink, DollarSign, Settings as SettingsIcon, Save,
-  Gift, Award, ArrowDownCircle, ArrowUpCircle
+  Gift, Award, ArrowDownCircle, ArrowUpCircle, Copy, XCircle, Share2
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useTheme } from '../context/ThemeContext';
@@ -23,14 +23,26 @@ export function AdminPanel() {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [activationRequests, setActivationRequests] = useState<ActivationRequest[]>([]);
   const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>({ bKash: '', Nagad: '', Rocket: '', activationFee: 20 });
-  const [activeTab, setActiveTab] = useState<'submissions' | 'withdrawals' | 'deposits' | 'activations' | 'missions' | 'users' | 'giftcodes' | 'levels' | 'settings'>('submissions');
+  const [activeTab, setActiveTab] = useState<'submissions' | 'withdrawals' | 'deposits' | 'activations' | 'missions' | 'users' | 'giftcodes' | 'levels' | 'settings' | 'socialsells'>('users');
   const [subFilter, setSubFilter] = useState<'pending' | 'approved' | 'rejected'>('pending');
   const [withFilter, setWithFilter] = useState<'pending' | 'completed' | 'rejected'>('pending');
   const [depFilter, setDepFilter] = useState<'pending' | 'approved' | 'rejected'>('pending');
   const [actFilter, setActFilter] = useState<'pending' | 'approved' | 'rejected'>('pending');
+  const [sellFilter, setSellFilter] = useState<'pending' | 'approved' | 'rejected'>('pending');
   
   const [giftCodes, setGiftCodes] = useState<GiftCode[]>([]);
   const [levelConfigs, setLevelConfigs] = useState<LevelConfig[]>([]);
+  const [socialSells, setSocialSells] = useState<SocialSellSubmission[]>([]);
+  const [dynamicSettings, setDynamicSettings] = useState<DynamicSettings>({
+    telegramGroup: '',
+    telegramChannel: '',
+    telegramSupport: '',
+    meetingGroup: '',
+    welcomeTitle: 'Welcome to our website',
+    welcomeText: 'We are here to help you earn money online.',
+    footerQuote: 'This should be used to tell a story and include any friend you might receive money and service for your teams.',
+    quoteAuthor: 'Shoaiba Islam'
+  });
   const [newGiftCode, setNewGiftCode] = useState({ code: '', amount: '', maxUses: '' });
   const [newLevel, setNewLevel] = useState({ level: '', name: '', minReferrals: '' });
   const [withdrawSettings, setWithdrawSettings] = useState({ minWithdraw: 500, maxWithdraw: 10000 });
@@ -40,6 +52,7 @@ export function AdminPanel() {
   const [editingMission, setEditingMission] = useState<Mission | null>(null);
   const [newMission, setNewMission] = useState({ title: '', description: '', reward: '', category: '', link: '' });
   const [editingBalance, setEditingBalance] = useState<{ userId: string, amount: string } | null>(null);
+  const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   useEffect(() => {
     if (loading || (profile?.role !== 'admin' && profile?.role !== 'moderator' && profile?.role !== 'ceo')) return;
@@ -134,6 +147,24 @@ export function AdminPanel() {
       }
     });
 
+    const unsubSocialSells = onSnapshot(query(collection(db, 'socialSells'), orderBy('submittedAt', 'desc')), (snap) => {
+      setSocialSells(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any as SocialSellSubmission)));
+    }, (error) => {
+      if (auth.currentUser) {
+        handleFirestoreError(error, OperationType.GET, 'socialSells');
+      }
+    });
+
+    const unsubDynamicSettings = onSnapshot(doc(db, 'dynamicSettings', 'main'), (snap) => {
+      if (snap.exists()) {
+        setDynamicSettings(snap.data() as DynamicSettings);
+      }
+    }, (error) => {
+      if (auth.currentUser) {
+        handleFirestoreError(error, OperationType.GET, 'dynamicSettings/main');
+      }
+    });
+
     return () => {
       unsubMissions();
       unsubSubmissions();
@@ -146,6 +177,8 @@ export function AdminPanel() {
       unsubLevels();
       unsubWithdrawSettings();
       unsubDepositSettings();
+      unsubSocialSells();
+      unsubDynamicSettings();
     };
   }, [profile, loading]);
 
@@ -220,6 +253,47 @@ export function AdminPanel() {
     alert('Deposit settings updated!');
   };
 
+  const handleUpdatePaymentSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await updateDoc(doc(db, 'settings', 'paymentNumbers'), paymentSettings as any);
+      alert('Activation settings updated successfully!');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'settings/paymentNumbers');
+    }
+  };
+
+  const handleUpdateDynamicSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await updateDoc(doc(db, 'dynamicSettings', 'main'), dynamicSettings as any);
+      alert('Dynamic settings updated successfully!');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'dynamicSettings/main');
+    }
+  };
+
+  const handleApproveSocialSell = async (sell: SocialSellSubmission) => {
+    if (!window.confirm('Approve this sell request?')) return;
+    try {
+      await updateDoc(doc(db, 'socialSells', sell.id), { status: 'approved' });
+      alert('Sell request approved!');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `socialSells/${sell.id}`);
+    }
+  };
+
+  const handleRejectSocialSell = async (id: string) => {
+    const note = window.prompt('Enter rejection reason:');
+    if (note === null) return;
+    try {
+      await updateDoc(doc(db, 'socialSells', id), { status: 'rejected', adminNote: note });
+      alert('Sell request rejected.');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `socialSells/${id}`);
+    }
+  };
+
   const handleAddMission = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -250,6 +324,20 @@ export function AdminPanel() {
       await deleteDoc(doc(db, 'missions', id));
     } catch (error) {
       console.error("Delete mission error:", error);
+    }
+  };
+
+  const handleUpdateUserRole = async (uid: string, newRole: 'admin' | 'moderator' | 'user') => {
+    if (profile?.role !== 'ceo') {
+      alert('Only CEO can change user roles.');
+      return;
+    }
+    if (!window.confirm(`Are you sure you want to change this user's role to ${newRole}?`)) return;
+    try {
+      await updateDoc(doc(db, 'users', uid), { role: newRole });
+      alert('User role updated successfully!');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `users/${uid}`);
     }
   };
 
@@ -398,6 +486,84 @@ export function AdminPanel() {
     }
   };
 
+  const handleMigrateUserIds = async () => {
+    if (profile?.role !== 'ceo') return;
+    if (!window.confirm('This will migrate all User IDs to the new 8-digit format. Continue?')) return;
+    
+    let migratedCount = 0;
+    try {
+      for (const u of users) {
+        if (u.userId && u.userId.length < 8) {
+          const newId = u.userId.padStart(8, '0');
+          await runTransaction(db, async (transaction) => {
+            const userRef = doc(db, 'users', u.uid);
+            const lookupRef = doc(db, 'referral_lookup', newId);
+            const oldLookupRef = doc(db, 'referral_lookup', u.userId!);
+
+            transaction.update(userRef, { 
+              userId: newId,
+              referralCode: newId 
+            });
+
+            transaction.set(lookupRef, {
+              uid: u.uid,
+              userName: u.userName,
+              userId: newId
+            });
+
+            if (u.userId !== newId) {
+              transaction.delete(oldLookupRef);
+            }
+          });
+          migratedCount++;
+        }
+      }
+      alert(`Successfully migrated ${migratedCount} users to 8-digit IDs.`);
+    } catch (error) {
+      console.error("Migration error:", error);
+      alert('Migration failed. Check console for details.');
+    }
+  };
+
+  const handleUpdateUserId = async (userId: string, currentId: string) => {
+    if (profile?.role !== 'ceo') return;
+    const newId = window.prompt(`Enter new 8-digit ID for this user (Current: ${currentId}):`, currentId);
+    if (!newId || newId === currentId) return;
+    
+    if (!/^\d{8}$/.test(newId)) {
+      alert("ID must be exactly 8 digits.");
+      return;
+    }
+
+    try {
+      await runTransaction(db, async (transaction) => {
+        const userRef = doc(db, 'users', userId);
+        const lookupRef = doc(db, 'referral_lookup', newId);
+        const oldLookupRef = doc(db, 'referral_lookup', currentId);
+
+        const userDoc = await transaction.get(userRef);
+        if (!userDoc.exists()) throw new Error("User not found");
+
+        transaction.update(userRef, { 
+          userId: newId,
+          referralCode: newId 
+        });
+
+        transaction.set(lookupRef, {
+          uid: userId,
+          userName: userDoc.data().userName,
+          userId: newId
+        });
+
+        transaction.delete(oldLookupRef);
+      });
+      alert('User ID updated successfully!');
+    } catch (error) {
+      console.error("Update User ID error:", error);
+      alert('Failed to update User ID. It might already be in use.');
+    }
+  };
+
   const handleDeleteUser = async (userId: string, userRole?: string) => {
     if (userRole === 'ceo') {
       alert("CEO cannot be deleted.");
@@ -435,30 +601,6 @@ export function AdminPanel() {
       await updateDoc(doc(db, 'activationRequests', id), { status: 'rejected' });
     } catch (error) {
       console.error("Reject activation error:", error);
-    }
-  };
-
-  const handleUpdateSettings = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await updateDoc(doc(db, 'settings', 'paymentNumbers'), {
-        ...paymentSettings,
-        activationFee: Number(paymentSettings.activationFee)
-      });
-      alert('Settings updated successfully!');
-    } catch (error) {
-      // If document doesn't exist, create it
-      try {
-        await runTransaction(db, async (transaction) => {
-          transaction.set(doc(db, 'settings', 'paymentNumbers'), {
-            ...paymentSettings,
-            activationFee: Number(paymentSettings.activationFee)
-          });
-        });
-        alert('Settings created successfully!');
-      } catch (err) {
-        console.error("Update settings error:", err);
-      }
     }
   };
 
@@ -500,6 +642,12 @@ export function AdminPanel() {
     d.userName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     d.transactionId?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     d.paymentNumber?.toLowerCase().includes(searchQuery.toLowerCase())
+  ).length;
+
+  const sellMatches = socialSells.filter(s => 
+    s.userName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    s.platform?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    s.email?.toLowerCase().includes(searchQuery.toLowerCase())
   ).length;
 
   const filteredUsers = users.filter(u => 
@@ -553,7 +701,7 @@ export function AdminPanel() {
     );
   }
 
-  if (profile?.role !== 'admin') {
+  if (profile?.role !== 'admin' && profile?.role !== 'moderator' && profile?.role !== 'ceo') {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className={cn(
@@ -589,6 +737,14 @@ export function AdminPanel() {
           <div className="space-y-1">
             <h2 className="text-4xl font-black tracking-tighter italic uppercase">Admin <span className="text-pink-500">Panel</span></h2>
             <p className="text-slate-500 font-black uppercase tracking-[0.2em] text-[10px]">Command Center • {new Date().toLocaleDateString()}</p>
+            {profile?.role === 'ceo' && (
+              <button 
+                onClick={handleMigrateUserIds}
+                className="mt-2 text-[10px] bg-pink-500/10 text-pink-500 px-3 py-1 rounded-full font-black tracking-widest hover:bg-pink-500 hover:text-white transition-all"
+              >
+                Migrate All IDs to 8-Digits
+              </button>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-4 w-full md:w-auto">
@@ -644,7 +800,7 @@ export function AdminPanel() {
           theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
         )}>
           <div className="flex min-w-max gap-1">
-            {(['submissions', 'withdrawals', 'deposits', 'activations', 'missions', 'users', 'giftcodes', 'levels', 'settings'] as const).map((tab) => (
+            {(['submissions', 'withdrawals', 'deposits', 'activations', 'socialsells', 'missions', 'users', 'giftcodes', 'levels', 'settings'] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -659,13 +815,14 @@ export function AdminPanel() {
                 {tab === 'withdrawals' && <Landmark className="w-4 h-4" />}
                 {tab === 'deposits' && <ArrowDownCircle className="w-4 h-4" />}
                 {tab === 'activations' && <ShieldCheck className="w-4 h-4" />}
+                {tab === 'socialsells' && <Share2 className="w-4 h-4" />}
                 {tab === 'missions' && <Eye className="w-4 h-4" />}
                 {tab === 'users' && <UsersIcon className="w-4 h-4" />}
                 {tab === 'giftcodes' && <Gift className="w-4 h-4" />}
                 {tab === 'levels' && <Award className="w-4 h-4" />}
                 {tab === 'settings' && <SettingsIcon className="w-4 h-4" />}
                 {tab}
-                {searchQuery && tab !== 'settings' && tab !== 'giftcodes' && tab !== 'levels' && (
+                {searchQuery && tab !== 'settings' && tab !== 'giftcodes' && tab !== 'levels' ? (
                   <span className={cn(
                     "ml-1 px-1.5 py-0.5 rounded-full text-[8px] font-black",
                     activeTab === tab ? "bg-white text-pink-500" : "bg-pink-500 text-white"
@@ -674,9 +831,33 @@ export function AdminPanel() {
                     {tab === 'withdrawals' && withMatches}
                     {tab === 'deposits' && depMatches}
                     {tab === 'activations' && actMatches}
+                    {tab === 'socialsells' && sellMatches}
                     {tab === 'missions' && missionMatches}
                     {tab === 'users' && userMatches}
                   </span>
+                ) : (
+                  <>
+                    {tab === 'submissions' && submissions.filter(s => s.status === 'pending').length > 0 && (
+                      <span className="ml-1 px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[8px] font-black">
+                        {submissions.filter(s => s.status === 'pending').length}
+                      </span>
+                    )}
+                    {tab === 'withdrawals' && withdrawals.filter(w => w.status === 'pending').length > 0 && (
+                      <span className="ml-1 px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[8px] font-black">
+                        {withdrawals.filter(w => w.status === 'pending').length}
+                      </span>
+                    )}
+                    {tab === 'activations' && activationRequests.filter(a => a.status === 'pending').length > 0 && (
+                      <span className="ml-1 px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[8px] font-black">
+                        {activationRequests.filter(a => a.status === 'pending').length}
+                      </span>
+                    )}
+                    {tab === 'deposits' && deposits.filter(d => d.status === 'pending').length > 0 && (
+                      <span className="ml-1 px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[8px] font-black">
+                        {deposits.filter(d => d.status === 'pending').length}
+                      </span>
+                    )}
+                  </>
                 )}
               </button>
             ))}
@@ -786,16 +967,16 @@ export function AdminPanel() {
                       </div>
                     </div>
                     {sub.status === 'pending' && (
-                      <div className="flex lg:flex-col gap-4 justify-center">
+                      <div className="flex flex-row lg:flex-col gap-4 justify-center flex-wrap">
                         <button 
                           onClick={() => handleApproveSubmission(sub)}
-                          className="bg-emerald-500 hover:bg-emerald-600 text-white p-6 rounded-[1.5rem] transition-all active:scale-95 shadow-xl shadow-emerald-500/20"
+                          className="flex-1 lg:flex-none bg-emerald-500 hover:bg-emerald-600 text-white p-6 rounded-[1.5rem] transition-all active:scale-95 shadow-xl shadow-emerald-500/20 flex items-center justify-center"
                         >
                           <Check className="w-8 h-8" />
                         </button>
                         <button 
                           onClick={() => handleRejectSubmission(sub.id)}
-                          className="bg-rose-500 hover:bg-rose-600 text-white p-6 rounded-[1.5rem] transition-all active:scale-95 shadow-xl shadow-rose-500/20"
+                          className="flex-1 lg:flex-none bg-rose-500 hover:bg-rose-600 text-white p-6 rounded-[1.5rem] transition-all active:scale-95 shadow-xl shadow-rose-500/20 flex items-center justify-center"
                         >
                           <X className="w-8 h-8" />
                         </button>
@@ -880,16 +1061,16 @@ export function AdminPanel() {
                       </div>
                     </div>
                     {w.status === 'pending' && (
-                      <div className="flex flex-col gap-4 w-full sm:w-auto">
+                      <div className="flex flex-row lg:flex-col gap-4 w-full lg:w-auto flex-wrap">
                         <button 
                           onClick={() => handleCompleteWithdrawal(w)}
-                          className="bg-emerald-500 hover:bg-emerald-600 text-white px-10 py-5 rounded-[1.5rem] font-black uppercase tracking-widest transition-all active:scale-95 shadow-xl shadow-emerald-500/20"
+                          className="flex-1 lg:flex-none bg-emerald-500 hover:bg-emerald-600 text-white px-10 py-5 rounded-[1.5rem] font-black uppercase tracking-widest transition-all active:scale-95 shadow-xl shadow-emerald-500/20"
                         >
-                          Complete Payout
+                          Complete
                         </button>
                         <button 
                           onClick={() => handleRejectWithdrawal(w)}
-                          className="bg-rose-500 hover:bg-rose-600 text-white px-10 py-5 rounded-[1.5rem] font-black uppercase tracking-widest transition-all active:scale-95 shadow-xl shadow-rose-500/20 flex items-center justify-center gap-2"
+                          className="flex-1 lg:flex-none bg-rose-500 hover:bg-rose-600 text-white px-10 py-5 rounded-[1.5rem] font-black uppercase tracking-widest transition-all active:scale-95 shadow-xl shadow-rose-500/20 flex items-center justify-center gap-2"
                         >
                           <X className="w-5 h-5" /> Reject
                         </button>
@@ -903,13 +1084,13 @@ export function AdminPanel() {
 
           {activeTab === 'deposits' && (
             <div className="space-y-6">
-              <div className="flex items-center gap-4 mb-8">
+              <div className="flex items-center gap-4 mb-8 overflow-x-auto pb-2 no-scrollbar">
                 {(['pending', 'approved', 'rejected'] as const).map((f) => (
                   <button
                     key={f}
                     onClick={() => setDepFilter(f)}
                     className={cn(
-                      "px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all",
+                      "px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap",
                       depFilter === f 
                         ? "bg-pink-500 text-white shadow-lg shadow-pink-500/20" 
                         : "bg-slate-500/10 text-slate-500 hover:bg-slate-500/20"
@@ -1343,7 +1524,7 @@ export function AdminPanel() {
                     <p className="text-slate-500 font-black uppercase tracking-[0.2em] text-[10px]">Configure activation numbers and fees</p>
                   </div>
 
-                  <form onSubmit={handleUpdateSettings} className="space-y-6">
+                  <form onSubmit={handleUpdatePaymentSettings} className="space-y-6">
                     <div className="space-y-4">
                       <div className="space-y-2">
                         <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">bKash Number</label>
@@ -1498,6 +1679,269 @@ export function AdminPanel() {
                   </div>
                 </form>
               </div>
+
+              {/* Dynamic Site Settings */}
+              <div className={cn(
+                "rounded-[3rem] p-10 border space-y-10",
+                theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
+              )}>
+                <div className="space-y-2">
+                  <h3 className="text-2xl font-black tracking-tighter italic uppercase">Site <span className="text-pink-500">Content</span></h3>
+                  <p className="text-slate-500 font-black uppercase tracking-[0.2em] text-[10px]">Configure links and text content</p>
+                </div>
+
+                <form onSubmit={handleUpdateDynamicSettings} className="space-y-10">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {/* Telegram Links */}
+                    <div className="space-y-6">
+                      <h4 className="text-sm font-black uppercase tracking-widest text-pink-500 italic">Telegram Links</h4>
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Telegram Group</label>
+                          <input 
+                            value={dynamicSettings.telegramGroup}
+                            onChange={e => setDynamicSettings({...dynamicSettings, telegramGroup: e.target.value})}
+                            placeholder="https://t.me/..."
+                            className={cn(
+                              "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500",
+                              theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
+                            )}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Telegram Channel</label>
+                          <input 
+                            value={dynamicSettings.telegramChannel}
+                            onChange={e => setDynamicSettings({...dynamicSettings, telegramChannel: e.target.value})}
+                            placeholder="https://t.me/..."
+                            className={cn(
+                              "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500",
+                              theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
+                            )}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Private Support</label>
+                          <input 
+                            value={dynamicSettings.telegramSupport}
+                            onChange={e => setDynamicSettings({...dynamicSettings, telegramSupport: e.target.value})}
+                            placeholder="https://t.me/..."
+                            className={cn(
+                              "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500",
+                              theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
+                            )}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Meeting Link</label>
+                          <input 
+                            value={dynamicSettings.meetingGroup}
+                            onChange={e => setDynamicSettings({...dynamicSettings, meetingGroup: e.target.value})}
+                            placeholder="https://t.me/..."
+                            className={cn(
+                              "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500",
+                              theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
+                            )}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Welcome Text */}
+                    <div className="space-y-6">
+                      <h4 className="text-sm font-black uppercase tracking-widest text-pink-500 italic">Welcome Content</h4>
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Welcome Title</label>
+                          <input 
+                            value={dynamicSettings.welcomeTitle}
+                            onChange={e => setDynamicSettings({...dynamicSettings, welcomeTitle: e.target.value})}
+                            className={cn(
+                              "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500",
+                              theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
+                            )}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Welcome Text</label>
+                          <textarea 
+                            value={dynamicSettings.welcomeText}
+                            onChange={e => setDynamicSettings({...dynamicSettings, welcomeText: e.target.value})}
+                            rows={3}
+                            className={cn(
+                              "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500 resize-none",
+                              theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
+                            )}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Footer Quote</label>
+                          <textarea 
+                            value={dynamicSettings.footerQuote}
+                            onChange={e => setDynamicSettings({...dynamicSettings, footerQuote: e.target.value})}
+                            rows={2}
+                            className={cn(
+                              "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500 resize-none",
+                              theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
+                            )}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Quote Author</label>
+                          <input 
+                            value={dynamicSettings.quoteAuthor}
+                            onChange={e => setDynamicSettings({...dynamicSettings, quoteAuthor: e.target.value})}
+                            className={cn(
+                              "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500",
+                              theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
+                            )}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <button type="submit" className="w-full bg-pink-500 text-white font-black py-4 rounded-2xl shadow-lg shadow-pink-500/20 uppercase tracking-widest text-xs flex items-center justify-center gap-2">
+                    <Save className="w-4 h-4" /> Save Site Content
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'socialsells' && (
+            <div className="space-y-6">
+              <div className="flex gap-2">
+                {(['pending', 'approved', 'rejected'] as const).map(f => (
+                  <button
+                    key={f}
+                    onClick={() => setSellFilter(f)}
+                    className={cn(
+                      "px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all",
+                      sellFilter === f 
+                        ? "bg-pink-500 border-pink-500 text-white" 
+                        : theme === 'dark' ? "border-[#303456] text-slate-500 hover:border-pink-500" : "border-slate-200 text-slate-400 hover:border-pink-500"
+                    )}
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
+
+              <div className="grid gap-6">
+                {socialSells.filter(s => s.status === sellFilter && (
+                  s.userName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                  s.platform?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                  s.email?.toLowerCase().includes(searchQuery.toLowerCase())
+                )).length === 0 && (
+                  <div className={cn(
+                    "text-center py-24 rounded-[3rem] border border-dashed text-sm font-black uppercase tracking-widest italic",
+                    theme === 'dark' ? "bg-[#1a1c2e] border-[#303456] text-slate-500" : "bg-white border-slate-200 text-slate-400"
+                  )}>
+                    No {sellFilter} sell requests found.
+                  </div>
+                )}
+                {socialSells.filter(s => s.status === sellFilter && (
+                  s.userName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                  s.platform?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                  s.email?.toLowerCase().includes(searchQuery.toLowerCase())
+                )).map(sell => (
+                  <div key={sell.id} className={cn(
+                    "rounded-[3rem] p-10 flex flex-col lg:flex-row justify-between gap-10 border transition-all hover:shadow-2xl hover:shadow-pink-500/5",
+                    theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
+                  )}>
+                    <div className="space-y-8 flex-1">
+                      <div className="flex items-center gap-5">
+                        <div className="w-14 h-14 bg-pink-500/10 rounded-[1.25rem] flex items-center justify-center border border-pink-500/20">
+                          <Share2 className="w-7 h-7 text-pink-500" />
+                        </div>
+                        <div>
+                          <div className="font-black text-2xl tracking-tight italic">{sell.userName || 'Anonymous'}</div>
+                          <div className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-black">Platform: {sell.platform} • ID: {sell.userSequentialId}</div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className={cn(
+                          "p-6 rounded-[2rem] border",
+                          theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
+                        )}>
+                          <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Account Details</div>
+                          <div className="space-y-2">
+                            {sell.idName && (
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="text-sm font-bold">ID Name: <span className="text-pink-500">{sell.idName}</span></div>
+                                <button onClick={() => { navigator.clipboard.writeText(sell.idName!); alert('ID Name copied!'); }} className="p-1 hover:bg-pink-500/10 rounded text-pink-500"><Copy className="w-3 h-3" /></button>
+                              </div>
+                            )}
+                            {sell.username && (
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="text-sm font-bold">Username: <span className="text-pink-500">{sell.username}</span></div>
+                                <button onClick={() => { navigator.clipboard.writeText(sell.username!); alert('Username copied!'); }} className="p-1 hover:bg-pink-500/10 rounded text-pink-500"><Copy className="w-3 h-3" /></button>
+                              </div>
+                            )}
+                            {sell.email && (
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="text-sm font-bold">Email/Gmail: <span className="text-pink-500">{sell.email}</span></div>
+                                <button onClick={() => { navigator.clipboard.writeText(sell.email!); alert('Email copied!'); }} className="p-1 hover:bg-pink-500/10 rounded text-pink-500"><Copy className="w-3 h-3" /></button>
+                              </div>
+                            )}
+                            {sell.gmail && (
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="text-sm font-bold">Gmail: <span className="text-pink-500">{sell.gmail}</span></div>
+                                <button onClick={() => { navigator.clipboard.writeText(sell.gmail!); alert('Gmail copied!'); }} className="p-1 hover:bg-pink-500/10 rounded text-pink-500"><Copy className="w-3 h-3" /></button>
+                              </div>
+                            )}
+                            {sell.password && (
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="text-sm font-bold">Password: <span className="text-pink-500">{sell.password}</span></div>
+                                <button onClick={() => { navigator.clipboard.writeText(sell.password!); alert('Password copied!'); }} className="p-1 hover:bg-pink-500/10 rounded text-pink-500"><Copy className="w-3 h-3" /></button>
+                              </div>
+                            )}
+                            {sell.twoFactor && (
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="text-sm font-bold">2FA: <span className="text-pink-500">{sell.twoFactor}</span></div>
+                                <button onClick={() => { navigator.clipboard.writeText(sell.twoFactor!); alert('2FA copied!'); }} className="p-1 hover:bg-pink-500/10 rounded text-pink-500"><Copy className="w-3 h-3" /></button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {sell.screenshot && (
+                          <div className={cn(
+                            "p-6 rounded-[2rem] border",
+                            theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
+                          )}>
+                            <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Screenshot</div>
+                            <a href={sell.screenshot} target="_blank" rel="noopener noreferrer" className="block relative aspect-video rounded-xl overflow-hidden border border-slate-200/20">
+                              <img src={sell.screenshot} alt="Screenshot" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                              <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
+                                <ExternalLink className="w-6 h-6 text-white" />
+                              </div>
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {sell.status === 'pending' && (
+                      <div className="flex flex-row lg:flex-col gap-3 justify-center">
+                        <button 
+                          onClick={() => handleApproveSocialSell(sell)}
+                          className="px-8 py-4 bg-emerald-500 text-white rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl shadow-emerald-500/20 transition-all hover:scale-105 active:scale-95 flex items-center gap-2"
+                        >
+                          <CheckCircle2 className="w-4 h-4" /> Approve
+                        </button>
+                        <button 
+                          onClick={() => handleRejectSocialSell(sell.id)}
+                          className="px-8 py-4 bg-rose-500 text-white rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl shadow-rose-500/20 transition-all hover:scale-105 active:scale-95 flex items-center gap-2"
+                        >
+                          <XCircle className="w-4 h-4" /> Reject
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
@@ -1586,9 +2030,63 @@ export function AdminPanel() {
                         </div>
                         <div className="flex flex-col gap-1">
                           <div className="flex items-center gap-2">
-                            <div className="text-[10px] text-slate-500 font-bold tracking-widest">{u.userName} • {u.email}</div>
-                            <div className="text-[10px] bg-pink-500/10 text-pink-500 px-2 py-0.5 rounded-full font-black tracking-widest">ID: {u.userId || 'N/A'}</div>
+                            <div className="text-[10px] text-slate-500 font-bold tracking-widest flex items-center gap-1">
+                              {u.userName} • {u.email}
+                              <button 
+                                onClick={() => {
+                                  navigator.clipboard.writeText(u.email || '');
+                                  setMessage({ type: 'success', text: 'Email copied!' });
+                                }}
+                                className="hover:text-pink-500 transition-colors"
+                                title="Copy Email"
+                              >
+                                <Copy className="w-2 h-2" />
+                              </button>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <div className="text-[10px] bg-pink-500/10 text-pink-500 px-2 py-0.5 rounded-full font-black tracking-widest flex items-center gap-1">
+                                ID: {u.userId || 'N/A'}
+                                {u.userId && (
+                                  <button 
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(u.userId!);
+                                      setMessage({ type: 'success', text: 'ID copied!' });
+                                    }}
+                                    className="hover:scale-110 transition-transform"
+                                    title="Copy ID"
+                                  >
+                                    <Copy className="w-2 h-2" />
+                                  </button>
+                                )}
+                              </div>
+                              {profile?.role === 'ceo' && (
+                                <button 
+                                  onClick={() => handleUpdateUserId(u.uid, u.userId || '')}
+                                  className="p-1 hover:bg-pink-500/10 rounded-md transition-colors"
+                                  title="Edit User ID"
+                                >
+                                  <Edit3 className="w-3 h-3 text-pink-500" />
+                                </button>
+                              )}
+                            </div>
                           </div>
+                          {activationRequests.find(a => a.userId === u.uid && a.status === 'pending') && (
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
+                                <Clock className="w-2 h-2" /> Pending Activation
+                              </span>
+                              <button 
+                                onClick={() => {
+                                  setActiveTab('activations');
+                                  setActFilter('pending');
+                                  setSearchQuery(u.userId || u.userName || '');
+                                }}
+                                className="text-[8px] font-black text-pink-500 hover:underline uppercase tracking-widest"
+                              >
+                                View Request
+                              </button>
+                            </div>
+                          )}
                           {u.referredBy && (
                             <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
                               Referred by: {(() => {
@@ -1598,7 +2096,7 @@ export function AdminPanel() {
                             </div>
                           )}
                           <div className="text-[9px] font-black text-pink-400 uppercase tracking-widest mt-1">
-                            Team Size: {users.filter(ref => ref.referredBy === u.userId).length} Agents
+                            Team Size: {users.filter(ref => ref.referredBy === u.userId).length} Agents • Joined: {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : 'N/A'}
                           </div>
                         </div>
                       </div>
@@ -1795,6 +2293,19 @@ export function AdminPanel() {
               </button>
             </form>
           </div>
+        </div>
+      )}
+      {/* Toast Message */}
+      {message && (
+        <div className={cn(
+          "fixed bottom-20 left-1/2 -translate-x-1/2 px-6 py-3 rounded-2xl shadow-lg flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 z-[100]",
+          message.type === 'success' ? "bg-emerald-600 text-white" : "bg-red-600 text-white"
+        )}>
+          {message.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+          <span className="font-medium">{message.text}</span>
+          <button onClick={() => setMessage(null)} className="ml-2 opacity-50 hover:opacity-100">
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
     </div>

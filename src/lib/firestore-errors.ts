@@ -48,5 +48,5 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     path
   }
   console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  // Do not throw here to avoid crashing the app and causing internal assertion failures in Firestore SDK
 }

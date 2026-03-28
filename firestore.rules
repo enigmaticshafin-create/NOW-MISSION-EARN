@@ -41,14 +41,17 @@ service cloud.firestore {
     }
 
     function isCeo() {
-      return isAuthenticated() && request.auth.token.email == "enigmaticshafin@gmail.com";
+      return isAuthenticated() && 
+             request.auth.token.email == "enigmaticshafin@gmail.com" && 
+             request.auth.token.email_verified == true;
     }
 
     function isAdmin() {
       return isAuthenticated() &&
         (isCeo() || 
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'moderator');
+         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+          (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'moderator')));
     }
 
     function hasOnlyAllowedFields(fields) {
@@ -126,7 +129,7 @@ service cloud.firestore {
     // ===============================================================
 
     match /users/{userId} {
-      allow read: if isAuthenticated();
+      allow read: if isOwner(userId) || isAdmin();
       allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data);
       allow update: if (isCeo() && isValidUser(request.resource.data)) || 
                     (isAdmin() && resource.data.role != 'ceo' && request.resource.data.role == resource.data.role) ||
@@ -184,6 +187,17 @@ service cloud.firestore {
 
     match /levelConfigs/{levelId} {
       allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /socialSells/{sellId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow create: if isAuthenticated();
+      allow update: if isAdmin();
+    }
+
+    match /dynamicSettings/{settingId} {
+      allow read: if true;
       allow write: if isAdmin();
     }
 

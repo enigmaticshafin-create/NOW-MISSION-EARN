@@ -38,7 +38,7 @@ export function Register() {
     try {
       // CEO email bypass
       if (referBy === "enigmaticshafin@gmail.com") {
-        setReferrerUserId("0000001");
+        setReferrerUserId("00000001");
         setStep(2);
         setLoading(false);
         return;
@@ -97,7 +97,7 @@ export function Register() {
           return count;
         });
 
-        const formattedId = nextId.toString().padStart(7, '0');
+        const formattedId = nextId.toString().padStart(8, '0');
         const isCeo = user.email === "enigmaticshafin@gmail.com";
         const myReferralCode = formattedId;
 

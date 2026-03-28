@@ -27,9 +27,24 @@ export const Profile: React.FC = () => {
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
   const [submissions, setSubmissions] = useState<MissionSubmission[]>([]);
   const [amount, setAmount] = useState('');
-  const [method, setMethod] = useState('');
+  const [method, setMethod] = useState<'bKash' | 'Nagad' | 'Rocket' | ''>('');
+  const [paymentNumber, setPaymentNumber] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [referralCount, setReferralCount] = useState(0);
+
+  useEffect(() => {
+    if (!user || !profile?.userId) return;
+
+    const rQ = query(collection(db, 'users'), where('referBy', '==', profile.userId));
+    const unsubReferrals = onSnapshot(rQ, (snap) => {
+      setReferralCount(snap.size);
+    }, (error) => {
+      console.error("Error fetching referral count:", error);
+    });
+
+    return () => unsubReferrals();
+  }, [user, profile?.userId]);
 
   useEffect(() => {
     if (!user) return;
@@ -118,6 +133,11 @@ export const Profile: React.FC = () => {
       return;
     }
 
+    if (!method || !paymentNumber) {
+      setMessage({ type: 'error', text: 'Please select a method and enter your number.' });
+      return;
+    }
+
     setSubmitting(true);
     try {
       await runTransaction(db, async (transaction) => {
@@ -135,7 +155,8 @@ export const Profile: React.FC = () => {
           userName: profile?.userName || 'Anonymous',
           userSequentialId: profile?.userId || 'N/A',
           amount: withdrawAmount,
-          method: method.trim(),
+          method: method,
+          paymentNumber: paymentNumber,
           status: 'pending',
           requestedAt: new Date().toISOString(),
         });
@@ -146,6 +167,7 @@ export const Profile: React.FC = () => {
       setMessage({ type: 'success', text: 'Withdrawal request submitted!' });
       setAmount('');
       setMethod('');
+      setPaymentNumber('');
     } catch (error: any) {
       console.error("Withdrawal error:", error);
       setMessage({ type: 'error', text: error.message || 'Failed to submit request.' });
@@ -224,7 +246,7 @@ export const Profile: React.FC = () => {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className={cn(
           "rounded-3xl p-6 border space-y-2",
           theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
@@ -256,6 +278,17 @@ export const Profile: React.FC = () => {
           </div>
           <p className="text-slate-500 font-black uppercase tracking-widest text-[10px]">Pending</p>
           <h3 className="text-3xl font-black text-amber-500">${pendingEarned.toFixed(2)}</h3>
+        </div>
+
+        <div className={cn(
+          "rounded-3xl p-6 border space-y-2",
+          theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
+        )}>
+          <div className="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center mb-4">
+            <Users className="w-5 h-5 text-white" />
+          </div>
+          <p className="text-slate-500 font-black uppercase tracking-widest text-[10px]">Total Referrals</p>
+          <h3 className="text-3xl font-black text-blue-500">{referralCount}</h3>
         </div>
       </div>
 
@@ -335,12 +368,33 @@ export const Profile: React.FC = () => {
             </div>
             <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-2">Payment Method</label>
-              <textarea 
-                value={method}
-                onChange={(e) => setMethod(e.target.value)}
-                placeholder="Enter your payment details (e.g. PayPal, Bank)..."
+              <div className="grid grid-cols-3 gap-2">
+                {(['bKash', 'Nagad', 'Rocket'] as const).map(m => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setMethod(m)}
+                    className={cn(
+                      "py-3 rounded-xl font-black uppercase text-[10px] tracking-widest border transition-all",
+                      method === m 
+                        ? "bg-pink-500 border-pink-500 text-white shadow-lg shadow-pink-500/20" 
+                        : theme === 'dark' ? "bg-[#0a0b14] border-[#303456] text-slate-500" : "bg-slate-50 border-slate-200 text-slate-500"
+                    )}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-2">Your Account Number</label>
+              <input 
+                type="text" 
+                value={paymentNumber}
+                onChange={(e) => setPaymentNumber(e.target.value)}
+                placeholder="Enter your number..."
                 className={cn(
-                  "w-full rounded-2xl p-4 text-sm font-bold border transition-all min-h-[100px] resize-none",
+                  "w-full rounded-2xl p-4 text-sm font-bold border transition-all",
                   theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
                 )}
                 required
