@@ -121,9 +121,11 @@ function AppContent() {
         isSidebarOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <div className="h-full flex flex-col">
-          <div className="p-4 flex items-center justify-between lg:hidden">
-            <span className={cn("font-bold", theme === 'dark' ? "text-white" : "text-slate-900")}>Menu</span>
-            <button onClick={() => setIsSidebarOpen(false)} className="text-slate-400">
+          <div className="p-6 flex items-center justify-between border-b border-slate-800/50">
+            <Link to="/" onClick={() => setIsSidebarOpen(false)}>
+              <Logo theme={theme} size="sm" />
+            </Link>
+            <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden text-slate-400 hover:text-pink-500 transition-colors">
               <X className="w-6 h-6" />
             </button>
           </div>

@@ -27,7 +27,7 @@ export function Landing() {
 
         <div className="text-center space-y-8 relative z-10">
           <div className="flex justify-center">
-            <Logo className="scale-150" theme={theme} />
+            <Logo size="lg" theme={theme} />
           </div>
           <div className="bg-pink-500/10 border border-pink-500/20 rounded-2xl p-4 max-w-md mx-auto">
             <p className="text-[10px] font-black text-pink-500 uppercase tracking-widest leading-relaxed">

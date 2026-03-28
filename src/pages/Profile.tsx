@@ -154,7 +154,7 @@ export const Profile: React.FC = () => {
     }
   };
 
-  const referralLink = `${window.location.origin}/register?ref=${profile?.referralCode}`;
+  const referralLink = `${window.location.origin}/register?referBy=${profile?.referralCode ? profile.referralCode : (profile?.userId ? profile.userId : '')}`;
 
   const copyReferralLink = () => {
     navigator.clipboard.writeText(referralLink);

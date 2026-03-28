@@ -36,7 +36,7 @@ import { db, storage } from '../firebase';
 import { Mission, MissionSubmission, PaymentSettings } from '../types';
 
 export function Dashboard() {
-  const { user, profile } = useAuth();
+  const { user, profile, loading: authLoading } = useAuth();
   const { theme } = useTheme();
   const navigate = useNavigate();
   const [missions, setMissions] = useState<Mission[]>([]);
@@ -80,7 +80,7 @@ export function Dashboard() {
   }, [user]);
 
   const copyReferralLink = () => {
-    const link = `${window.location.origin}/register?referBy=${profile?.userId}`;
+    const link = `${window.location.origin}/register?referBy=${profile?.referralCode ? profile.referralCode : (profile?.userId ? profile.userId : '')}`;
     navigator.clipboard.writeText(link);
     alert('Referral link copied to clipboard!');
   };
@@ -139,7 +139,7 @@ export function Dashboard() {
     { name: 'Join meeting Group', icon: Send, color: 'bg-sky-500', url: '#' },
   ];
 
-  if (loading) {
+  if (loading || authLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-pink-500"></div>
@@ -149,6 +149,30 @@ export function Dashboard() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 pb-20 px-4">
+      {/* User ID & Profile Header */}
+      <div className={cn(
+        "rounded-[2rem] p-8 border flex flex-col sm:flex-row items-center justify-between gap-6",
+        theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
+      )}>
+        <div className="flex items-center gap-6">
+          <div className="w-16 h-16 bg-pink-500 rounded-2xl flex items-center justify-center shadow-lg shadow-pink-500/20">
+            <Users className="w-8 h-8 text-white" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-black tracking-tight italic">
+              Welcome, {profile?.firstName || 'User'}!
+            </h2>
+            <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">
+              Account Status: <span className={profile?.status === 'active' ? "text-green-500" : "text-amber-500"}>{profile?.status || 'Pending'}</span>
+            </p>
+          </div>
+        </div>
+        <div className="bg-pink-500/10 border border-pink-500/20 rounded-2xl px-6 py-3 text-center">
+          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Your User ID</p>
+          <p className="text-xl font-black text-pink-500 tracking-tighter">{profile?.userId || 'N/A'}</p>
+        </div>
+      </div>
+
       {/* Social Sell Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
         {socialSellItems.map((item) => (
@@ -186,29 +210,43 @@ export function Dashboard() {
         </div>
       )}
 
-      {/* Referral Link Section */}
-      <div className={cn(
-        "rounded-[2rem] p-10 border text-center space-y-6",
-        theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
-      )}>
-        <h3 className="text-2xl font-black tracking-tight uppercase">Your Refer Link</h3>
-        <div className="relative max-w-3xl mx-auto">
-          <input 
-            type="text" 
-            readOnly 
-            value={`${window.location.origin}/register?referBy=${profile?.userId}`}
-            className={cn(
-              "w-full px-6 py-4 rounded-xl border font-bold text-center text-sm",
-              theme === 'dark' ? "bg-[#0a0b14] border-[#303456] text-slate-400" : "bg-slate-50 border-slate-200 text-slate-600"
-            )}
-          />
+      {/* User ID and Referral Link Section */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className={cn(
+          "rounded-[2rem] p-10 border text-center space-y-6",
+          theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
+        )}>
+          <h3 className="text-2xl font-black tracking-tight uppercase">Your User ID</h3>
+          <div className="text-4xl font-black text-pink-500 tracking-widest">
+            {profile?.userId || '--------'}
+          </div>
+          <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Use this ID for referrals</p>
         </div>
-        <button 
-          onClick={copyReferralLink}
-          className="bg-blue-600 text-white px-12 py-3 rounded-xl font-black uppercase tracking-widest shadow-lg shadow-blue-600/20 hover:scale-[1.02] transition-all"
-        >
-          Copy Link
-        </button>
+
+        <div className={cn(
+          "rounded-[2rem] p-10 border text-center space-y-6",
+          theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
+        )}>
+          <h3 className="text-2xl font-black tracking-tight uppercase">Your Refer Link</h3>
+          <div className="relative">
+            <input 
+              type="text" 
+              readOnly 
+              value={`${window.location.origin}/register?referBy=${profile?.referralCode ? profile.referralCode : (profile?.userId ? profile.userId : '')}`}
+              className={cn(
+                "w-full px-6 py-4 rounded-xl border font-bold text-center text-sm",
+                theme === 'dark' ? "bg-[#0a0b14] border-[#303456] text-slate-400" : "bg-slate-50 border-slate-200 text-slate-600"
+              )}
+            />
+          </div>
+          <button 
+            onClick={copyReferralLink}
+            className="w-full bg-pink-500 text-white py-4 rounded-xl font-black uppercase tracking-widest shadow-lg shadow-pink-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+          >
+            <Copy className="w-5 h-5" />
+            Copy Link
+          </button>
+        </div>
       </div>
 
       {/* Telegram Links Grid */}

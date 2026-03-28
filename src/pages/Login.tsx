@@ -6,6 +6,7 @@ import { doc, getDoc, setDoc, query, collection, where, limit, getDocs, runTrans
 import { Mail, Lock, Eye, EyeOff, AlertCircle, CheckCircle2, ArrowRight, ArrowLeft, UserPlus } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { cn } from '../lib/utils';
+import { Logo } from '../components/Logo';
 
 export function Login() {
   const [searchParams] = useSearchParams();
@@ -13,7 +14,7 @@ export function Login() {
   const { theme } = useTheme();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const referralCode = searchParams.get('ref') || '';
+  const referralCode = searchParams.get('referBy') || searchParams.get('ref') || '';
 
   const handleGoogleLogin = async () => {
     setLoading(true);
@@ -57,13 +58,8 @@ export function Login() {
         <div className="absolute bottom-0 left-0 w-32 h-32 bg-pink-500/5 rounded-full blur-3xl -ml-16 -mb-16" />
 
         <div className="text-center space-y-4 relative z-10">
-          <div className="w-20 h-20 bg-pink-500 rounded-[2rem] flex items-center justify-center mx-auto shadow-xl shadow-pink-500/20">
-            <CheckCircle2 className="w-10 h-10 text-white" />
-          </div>
+          <Logo size="lg" className="justify-center" theme={theme} />
           <div className="space-y-1">
-            <h1 className="text-4xl font-black tracking-tighter italic uppercase">
-              NOW <span className="text-pink-500">MISSION</span>
-            </h1>
             <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Agent Access Point</p>
           </div>
         </div>

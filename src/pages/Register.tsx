@@ -6,6 +6,7 @@ import { doc, getDoc, setDoc, query, collection, where, limit, getDocs, runTrans
 import { User, Mail, Phone, Hash, ArrowRight, CheckCircle2, AlertCircle, ShieldCheck } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { cn } from '../lib/utils';
+import { Logo } from '../components/Logo';
 
 export function Register() {
   const [searchParams] = useSearchParams();
@@ -15,7 +16,7 @@ export function Register() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  const [referBy, setReferBy] = useState(searchParams.get('referBy') || '');
+  const [referBy, setReferBy] = useState(searchParams.get('referBy') || searchParams.get('ref') || '');
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -33,17 +34,28 @@ export function Register() {
     setLoading(true);
     setError(null);
     try {
-      // Admin bypass or check if user exists with this userId
+      // Admin email bypass or check if user exists with this referralCode
       if (referBy === "enigmaticshafin@gmail.com") {
         setStep(2);
-      } else {
-        const q = query(collection(db, 'users'), where('userId', '==', referBy), limit(1));
-        const snap = await getDocs(q);
-        if (snap.empty) {
+        setLoading(false);
+        return;
+      }
+
+      const q = query(collection(db, 'users'), where('referralCode', '==', referBy), limit(1));
+      const snap = await getDocs(q);
+      
+      if (snap.empty) {
+        // Fallback for older users who might only have userId
+        const q2 = query(collection(db, 'users'), where('userId', '==', referBy), limit(1));
+        const snap2 = await getDocs(q2);
+        
+        if (snap2.empty) {
           setError("Invalid Referrer ID. Please check and try again.");
         } else {
           setStep(2);
         }
+      } else {
+        setStep(2);
       }
     } catch (err: any) {
       setError(err.message);
@@ -83,7 +95,7 @@ export function Register() {
 
         const formattedId = nextId.toString().padStart(8, '0');
         const isAdmin = user.email === "enigmaticshafin@gmail.com";
-        const myReferralCode = isAdmin ? user.email! : formattedId;
+        const myReferralCode = isAdmin ? "ADMIN" : formattedId;
 
         await setDoc(doc(db, 'users', user.uid), {
           uid: user.uid,
@@ -143,6 +155,7 @@ export function Register() {
         </div>
 
         <div className="text-center space-y-2">
+          <Logo size="lg" className="justify-center mb-6" theme={theme} />
           <h2 className="text-3xl font-black tracking-tight italic uppercase">Join the Mission</h2>
           <p className="text-slate-500 font-bold text-xs uppercase tracking-widest">
             {step === 1 ? "Verify Referrer" : step === 2 ? "Complete Profile" : "Final Step"}
