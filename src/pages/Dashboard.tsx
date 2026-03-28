@@ -30,7 +30,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, getDocs, where, addDoc, doc, getDoc } from 'firebase/firestore';
+import { collection, query, getDocs, where, addDoc, doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
 import { Mission, MissionSubmission, PaymentSettings } from '../types';
@@ -79,8 +79,61 @@ export function Dashboard() {
     fetchData();
   }, [user]);
 
+  useEffect(() => {
+    const fixAdminProfile = async () => {
+      if (user?.email === "enigmaticshafin@gmail.com" && profile) {
+        try {
+          const userRef = doc(db, 'users', user.uid);
+          const updates: any = {};
+          
+          // Ensure admin has a userId
+          if (!profile.userId) {
+            updates.userId = "00000001";
+          }
+          
+          // Change referralCode from "ADMIN" to userId if it's "ADMIN" or missing
+          if (!profile.referralCode || profile.referralCode === "ADMIN") {
+            updates.referralCode = profile.userId || "00000001";
+          }
+          
+          if (Object.keys(updates).length > 0) {
+            await updateDoc(userRef, updates);
+          }
+
+          const currentUserId = profile.userId || "00000001";
+
+          // Ensure referral_lookup exists for the userId
+          const lookupRef = doc(db, 'referral_lookup', currentUserId);
+          const lookupSnap = await getDoc(lookupRef);
+          if (!lookupSnap.exists()) {
+            await setDoc(lookupRef, {
+              uid: user.uid,
+              userName: profile.userName || "admin",
+              userId: currentUserId
+            });
+          }
+
+          // Keep "ADMIN" as an alias for backward compatibility
+          const adminAliasRef = doc(db, 'referral_lookup', "ADMIN");
+          const adminAliasSnap = await getDoc(adminAliasRef);
+          if (!adminAliasSnap.exists()) {
+            await setDoc(adminAliasRef, {
+              uid: user.uid,
+              userName: profile.userName || "admin",
+              userId: currentUserId
+            });
+          }
+        } catch (error) {
+          console.error("Error fixing admin profile:", error);
+        }
+      }
+    };
+    fixAdminProfile();
+  }, [user, profile]);
+
   const copyReferralLink = () => {
-    const link = `${window.location.origin}/register?referBy=${profile?.referralCode ? profile.referralCode : (profile?.userId ? profile.userId : '')}`;
+    const baseUrl = window.location.origin.includes('localhost') ? window.location.origin : 'https://now-mission-earn.vercel.app';
+    const link = `${baseUrl}/register?referBy=${profile?.referralCode ? profile.referralCode : (profile?.userId ? profile.userId : '')}`;
     navigator.clipboard.writeText(link);
     alert('Referral link copied to clipboard!');
   };
@@ -162,14 +215,13 @@ export function Dashboard() {
             <h2 className="text-2xl font-black tracking-tight italic">
               Welcome, {profile?.firstName || 'User'}!
             </h2>
+            <p className="text-pink-500 font-black text-sm uppercase tracking-widest">
+              Your User ID: {profile?.userId || 'N/A'}
+            </p>
             <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">
               Account Status: <span className={profile?.status === 'active' ? "text-green-500" : "text-amber-500"}>{profile?.status || 'Pending'}</span>
             </p>
           </div>
-        </div>
-        <div className="bg-pink-500/10 border border-pink-500/20 rounded-2xl px-6 py-3 text-center">
-          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Your User ID</p>
-          <p className="text-xl font-black text-pink-500 tracking-tighter">{profile?.userId || 'N/A'}</p>
         </div>
       </div>
 
@@ -232,7 +284,7 @@ export function Dashboard() {
             <input 
               type="text" 
               readOnly 
-              value={`${window.location.origin}/register?referBy=${profile?.referralCode ? profile.referralCode : (profile?.userId ? profile.userId : '')}`}
+              value={`${window.location.origin.includes('localhost') ? window.location.origin : 'https://now-mission-earn.vercel.app'}/register?referBy=${profile?.referralCode ? profile.referralCode : (profile?.userId ? profile.userId : '')}`}
               className={cn(
                 "w-full px-6 py-4 rounded-xl border font-bold text-center text-sm",
                 theme === 'dark' ? "bg-[#0a0b14] border-[#303456] text-slate-400" : "bg-slate-50 border-slate-200 text-slate-600"

@@ -154,7 +154,8 @@ export const Profile: React.FC = () => {
     }
   };
 
-  const referralLink = `${window.location.origin}/register?referBy=${profile?.referralCode ? profile.referralCode : (profile?.userId ? profile.userId : '')}`;
+  const baseUrl = window.location.origin.includes('localhost') ? window.location.origin : 'https://now-mission-earn.vercel.app';
+  const referralLink = `${baseUrl}/register?referBy=${profile?.referralCode ? profile.referralCode : (profile?.userId ? profile.userId : '')}`;
 
   const copyReferralLink = () => {
     navigator.clipboard.writeText(referralLink);

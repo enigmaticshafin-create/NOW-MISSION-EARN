@@ -617,9 +617,24 @@ export function AdminPanel() {
                         </div>
                         <div>
                           <div className="font-black text-2xl tracking-tight italic">{sub.userName || 'Anonymous'}</div>
-                          <div className="flex items-center gap-2">
-                            <div className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-black">Mission: {sub.missionTitle}</div>
-                            <div className="text-[10px] bg-pink-500/10 text-pink-500 px-2 py-0.5 rounded-full font-black tracking-widest">ID: {sub.userSequentialId || 'N/A'}</div>
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2">
+                              <div className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-black">Mission: {sub.missionTitle}</div>
+                              <div className="text-[10px] bg-pink-500/10 text-pink-500 px-2 py-0.5 rounded-full font-black tracking-widest">ID: {sub.userSequentialId || 'N/A'}</div>
+                            </div>
+                            {(() => {
+                              const user = users.find(u => u.uid === sub.userId);
+                              const referrer = user?.referredBy ? users.find(ref => ref.uid === user.referredBy || ref.userId === user.referredBy) : null;
+                              return referrer ? (
+                                <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                                  Referred by: {referrer.userName} ({referrer.userId})
+                                </div>
+                              ) : user?.referredBy ? (
+                                <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                                  Referred by: {user.referredBy}
+                                </div>
+                              ) : null;
+                            })()}
                           </div>
                         </div>
                       </div>
@@ -724,9 +739,24 @@ export function AdminPanel() {
                         </div>
                         <div>
                           <div className="text-4xl font-black text-rose-500 tracking-tighter italic">${w.amount.toFixed(2)}</div>
-                          <div className="flex items-center gap-2">
-                            <div className="text-[10px] text-slate-500 font-black uppercase tracking-widest italic">Request by {w.userName || 'Anonymous'}</div>
-                            <div className="text-[10px] bg-rose-500/10 text-rose-500 px-2 py-0.5 rounded-full font-black tracking-widest">ID: {w.userSequentialId || 'N/A'}</div>
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2">
+                              <div className="text-[10px] text-slate-500 font-black uppercase tracking-widest italic">Request by {w.userName || 'Anonymous'}</div>
+                              <div className="text-[10px] bg-rose-500/10 text-rose-500 px-2 py-0.5 rounded-full font-black tracking-widest">ID: {w.userSequentialId || 'N/A'}</div>
+                            </div>
+                            {(() => {
+                              const user = users.find(u => u.uid === w.userId);
+                              const referrer = user?.referredBy ? users.find(ref => ref.uid === user.referredBy || ref.userId === user.referredBy) : null;
+                              return referrer ? (
+                                <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                                  Referred by: {referrer.userName} ({referrer.userId})
+                                </div>
+                              ) : user?.referredBy ? (
+                                <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                                  Referred by: {user.referredBy}
+                                </div>
+                              ) : null;
+                            })()}
                           </div>
                         </div>
                       </div>
@@ -800,9 +830,24 @@ export function AdminPanel() {
                         </div>
                         <div>
                           <div className="font-black text-2xl tracking-tight italic">{act.userName || 'Anonymous'}</div>
-                          <div className="flex items-center gap-2">
-                            <div className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-black">{act.userEmail}</div>
-                            <div className="text-[10px] bg-pink-500/10 text-pink-500 px-2 py-0.5 rounded-full font-black tracking-widest">ID: {act.userSequentialId || 'N/A'}</div>
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2">
+                              <div className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-black">{act.userEmail}</div>
+                              <div className="text-[10px] bg-pink-500/10 text-pink-500 px-2 py-0.5 rounded-full font-black tracking-widest">ID: {act.userSequentialId || 'N/A'}</div>
+                            </div>
+                            {(() => {
+                              const user = users.find(u => u.uid === act.userId);
+                              const referrer = user?.referredBy ? users.find(ref => ref.uid === user.referredBy || ref.userId === user.referredBy) : null;
+                              return referrer ? (
+                                <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                                  Referred by: {referrer.userName} ({referrer.userId})
+                                </div>
+                              ) : user?.referredBy ? (
+                                <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                                  Referred by: {user.referredBy}
+                                </div>
+                              ) : null;
+                            })()}
                           </div>
                         </div>
                       </div>
@@ -1333,18 +1378,25 @@ export function AdminPanel() {
                         {u.userName?.charAt(0).toUpperCase() || 'U'}
                       </div>
                       <div>
-                        <div className="font-black text-xl tracking-tight italic">{u.userName || 'Anonymous'}</div>
+                        <div className="font-black text-xl tracking-tight italic">
+                          {u.firstName || u.lastName ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : u.userName || 'Anonymous'}
+                        </div>
                         <div className="flex flex-col gap-1">
                           <div className="flex items-center gap-2">
-                            <div className="text-[10px] text-slate-500 font-bold tracking-widest">{u.email}</div>
+                            <div className="text-[10px] text-slate-500 font-bold tracking-widest">{u.userName} • {u.email}</div>
                             <div className="text-[10px] bg-pink-500/10 text-pink-500 px-2 py-0.5 rounded-full font-black tracking-widest">ID: {u.userId || 'N/A'}</div>
                           </div>
                           {u.referredBy && (
                             <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                              Referred by: {users.find(ref => ref.uid === u.referredBy)?.userName || 'Unknown'} 
-                              ({users.find(ref => ref.uid === u.referredBy)?.userId || 'N/A'})
+                              Referred by: {(() => {
+                                const referrer = users.find(ref => ref.uid === u.referredBy || ref.userId === u.referredBy);
+                                return referrer ? `${referrer.userName} (${referrer.userId})` : u.referredBy;
+                              })()}
                             </div>
                           )}
+                          <div className="text-[9px] font-black text-pink-400 uppercase tracking-widest mt-1">
+                            Team Size: {users.filter(ref => ref.referredBy === u.userId).length} Agents
+                          </div>
                         </div>
                       </div>
                     </div>

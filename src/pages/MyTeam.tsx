@@ -7,6 +7,7 @@ import { UserProfile, LevelConfig } from '../types';
 import { 
   Users, 
   User as UserIcon,
+  Mail,
   ShieldCheck, 
   ShieldAlert,
   TrendingUp,
@@ -176,14 +177,24 @@ export default function MyTeam() {
                   <UserIcon className="w-6 h-6 text-pink-500" />
                 </div>
                 <div>
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-black text-lg tracking-tight">{member.userName}</h4>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h4 className="font-black text-lg tracking-tight">{member.firstName} {member.lastName}</h4>
                     <span className="text-[10px] font-black bg-slate-500/10 text-slate-500 px-2 py-0.5 rounded-full uppercase tracking-widest">ID: {member.userId}</span>
                   </div>
-                  <div className="flex items-center gap-3 mt-1">
-                    <span className="text-slate-500 text-xs font-bold uppercase tracking-widest">Sales: BDT {(member.totalEarned || 0).toFixed(2)}</span>
+                  <div className="flex flex-col gap-1 mt-1">
+                    <div className="flex items-center gap-2 text-slate-500 text-xs font-bold uppercase tracking-widest">
+                      <UserIcon className="w-3 h-3" />
+                      {member.userName}
+                    </div>
+                    <div className="flex items-center gap-2 text-slate-500 text-[10px] font-bold tracking-widest">
+                      <Mail className="w-3 h-3" />
+                      {member.email}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 mt-2">
+                    <span className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Sales: BDT {(member.totalEarned || 0).toFixed(2)}</span>
                     <div className="w-1 h-1 bg-slate-500 rounded-full" />
-                    <span className="text-slate-500 text-xs font-bold uppercase tracking-widest">Level {member.level || 1}</span>
+                    <span className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Level {member.level || 1}</span>
                   </div>
                 </div>
               </div>

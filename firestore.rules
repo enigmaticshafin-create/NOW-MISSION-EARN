@@ -42,8 +42,8 @@ service cloud.firestore {
 
     function isAdmin() {
       return isAuthenticated() &&
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-          (request.auth.token.email == "enigmaticshafin@gmail.com" && request.auth.token.email_verified == true));
+        (request.auth.token.email == "enigmaticshafin@gmail.com" || 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
     }
 
     function hasOnlyAllowedFields(fields) {
@@ -57,12 +57,6 @@ service cloud.firestore {
     // ===============================================================
     // Domain Validators
     // ===============================================================
-    function isRecent(ts) {
-      return isValidDateString(ts) && 
-             (request.time - timestamp(ts)).seconds() < 300 && 
-             (request.time - timestamp(ts)).seconds() > -300;
-    }
-
     function isValidDateString(dateStr) {
       return dateStr is string &&
         dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
@@ -104,25 +98,21 @@ service cloud.firestore {
     }
 
     function isValidActivationRequest(data) {
-      let settings = get(/databases/$(database)/documents/settings/paymentNumbers).data;
       return data.userId is string && data.userId == request.auth.uid &&
              data.method in ['bKash', 'Nagad', 'Rocket'] &&
              data.paymentNumber is string && data.paymentNumber.size() > 0 && data.paymentNumber.size() < 20 &&
-             data.amount is number && data.amount == settings.activationFee &&
+             data.amount is number && data.amount >= 0 &&
              data.transactionId is string && data.transactionId.size() > 0 && data.transactionId.size() < 50 &&
              (!('screenshot' in data) || (data.screenshot is string && data.screenshot.size() < 1000)) &&
              data.status in ['pending', 'approved', 'rejected'] &&
-             isValidDateString(data.submittedAt) &&
-             // Enforce uniqueness of transactionId via usedTransactionIds collection
-             !exists(/databases/$(database)/documents/usedTransactionIds/$(data.transactionId)) &&
-             getAfter(/databases/$(database)/documents/usedTransactionIds/$(data.transactionId)) != null;
+             isValidDateString(data.submittedAt);
     }
 
     function isValidPaymentSettings(data) {
-      return data.bKash is string && data.bKash.size() > 0 &&
-             data.Nagad is string && data.Nagad.size() > 0 &&
-             data.Rocket is string && data.Rocket.size() > 0 &&
-             data.activationFee is number && data.activationFee >= 0;
+      return (!('bKash' in data) || data.bKash is string) &&
+             (!('Nagad' in data) || data.Nagad is string) &&
+             (!('Rocket' in data) || data.Rocket is string) &&
+             (!('activationFee' in data) || data.activationFee is number);
     }
 
     // ===============================================================
@@ -130,43 +120,61 @@ service cloud.firestore {
     // ===============================================================
 
     match /users/{userId} {
-      allow read: if isOwner(userId) || isAdmin();
-      allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data) && 
-                    (request.auth.token.email == "enigmaticshafin@gmail.com" || ('referredBy' in request.resource.data && request.resource.data.referredBy.size() > 0));
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data);
       allow update: if isAdmin() || (isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.role == resource.data.role && request.resource.data.balance == resource.data.balance);
+    }
+
+    match /referral_lookup/{code} {
+      allow read: if true;
+      allow write: if isAuthenticated();
     }
 
     match /missions/{missionId} {
       allow read: if isAuthenticated();
-      allow write: if isAdmin() && isValidMission(request.resource.data);
+      allow write: if isAdmin();
     }
 
-    match /submissions/{submissionId} {
+    match /missionSubmissions/{submissionId} {
       allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
-      allow create: if isAuthenticated() && isValidSubmission(request.resource.data) && request.resource.data.status == 'pending';
-      allow update: if isAdmin() && isValidSubmission(request.resource.data);
+      allow create: if isAuthenticated() && isValidSubmission(request.resource.data);
+      allow update: if isAdmin();
     }
 
     match /withdrawals/{withdrawalId} {
       allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
-      allow create: if isAuthenticated() && isValidWithdrawal(request.resource.data) && request.resource.data.status == 'pending';
-      allow update: if isAdmin() && isValidWithdrawal(request.resource.data);
+      allow create: if isAuthenticated() && isValidWithdrawal(request.resource.data);
+      allow update: if isAdmin();
     }
 
     match /activationRequests/{requestId} {
       allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
-      allow create: if isAuthenticated() && isValidActivationRequest(request.resource.data) && request.resource.data.status == 'pending';
-      allow update: if isAdmin() && isValidActivationRequest(request.resource.data);
+      allow create: if isAuthenticated() && isValidActivationRequest(request.resource.data);
+      allow update: if isAdmin();
     }
 
-    match /settings/paymentNumbers {
+    match /settings/{settingId} {
       allow read: if isAuthenticated();
-      allow write: if isAdmin() && isValidPaymentSettings(request.resource.data);
+      allow write: if isAdmin();
     }
 
     match /usedTransactionIds/{transactionId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && !exists(/databases/$(database)/documents/usedTransactionIds/$(transactionId));
+      allow create: if isAuthenticated();
+    }
+
+    match /giftCodes/{codeId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /levelConfigs/{levelId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /counters/{counterId} {
+      allow read, write: if isAuthenticated();
     }
   }
 }

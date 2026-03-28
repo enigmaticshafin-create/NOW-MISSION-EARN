@@ -26,6 +26,8 @@ export function Register() {
     address: '',
   });
 
+  const [referrerUserId, setReferrerUserId] = useState<string | null>(null);
+
   const checkReferrer = async () => {
     if (!referBy) {
       setError("Referrer ID is required.");
@@ -34,35 +36,37 @@ export function Register() {
     setLoading(true);
     setError(null);
     try {
-      // Admin email bypass or check if user exists with this referralCode
+      // Admin email bypass
       if (referBy === "enigmaticshafin@gmail.com") {
+        setReferrerUserId("00000001");
         setStep(2);
         setLoading(false);
         return;
       }
 
-      const q = query(collection(db, 'users'), where('referralCode', '==', referBy), limit(1));
-      const snap = await getDocs(q);
+      // Check referral_lookup collection (publicly readable)
+      const lookupDoc = await getDoc(doc(db, 'referral_lookup', referBy));
       
-      if (snap.empty) {
-        // Fallback for older users who might only have userId
-        const q2 = query(collection(db, 'users'), where('userId', '==', referBy), limit(1));
-        const snap2 = await getDocs(q2);
-        
-        if (snap2.empty) {
-          setError("Invalid Referrer ID. Please check and try again.");
-        } else {
-          setStep(2);
-        }
+      if (!lookupDoc.exists()) {
+        setError("Invalid Referrer ID. Please check and try again.");
       } else {
+        const data = lookupDoc.data();
+        setReferrerUserId(data?.userId || referBy);
         setStep(2);
       }
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || "Verification failed");
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const initialReferBy = searchParams.get('referBy') || searchParams.get('ref');
+    if (initialReferBy && step === 1) {
+      checkReferrer();
+    }
+  }, []);
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,7 +99,7 @@ export function Register() {
 
         const formattedId = nextId.toString().padStart(8, '0');
         const isAdmin = user.email === "enigmaticshafin@gmail.com";
-        const myReferralCode = isAdmin ? "ADMIN" : formattedId;
+        const myReferralCode = formattedId;
 
         await setDoc(doc(db, 'users', user.uid), {
           uid: user.uid,
@@ -123,9 +127,16 @@ export function Register() {
           level: 1,
           role: isAdmin ? 'admin' : 'user',
           referralCode: myReferralCode,
-          referredBy: referBy,
+          referredBy: referrerUserId || referBy,
           status: 'active',
           createdAt: new Date().toISOString(),
+        });
+
+        // Add to referral_lookup for public verification
+        await setDoc(doc(db, 'referral_lookup', myReferralCode), {
+          uid: user.uid,
+          userName: formData.userName || user.email?.split('@')[0] || 'user',
+          userId: formattedId
         });
       }
       
@@ -188,13 +199,25 @@ export function Register() {
                 />
               </div>
             </div>
-            <button 
-              onClick={checkReferrer}
-              disabled={loading}
-              className="w-full bg-pink-500 text-white py-4 rounded-3xl font-black uppercase tracking-widest shadow-xl shadow-pink-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
-            >
-              {loading ? "Checking..." : "Verify Referrer"}
-            </button>
+            <div className="space-y-3">
+              <button 
+                onClick={checkReferrer}
+                disabled={loading}
+                className="w-full bg-pink-500 text-white py-4 rounded-3xl font-black uppercase tracking-widest shadow-xl shadow-pink-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
+              >
+                {loading ? "Checking..." : "Verify Referrer"}
+              </button>
+              <button 
+                onClick={() => {
+                  setReferBy('');
+                  setStep(2);
+                }}
+                disabled={loading}
+                className="w-full bg-transparent text-slate-500 py-2 rounded-xl font-bold uppercase tracking-widest text-xs hover:text-pink-500 transition-all"
+              >
+                Skip Referrer
+              </button>
+            </div>
           </div>
         )}
 
