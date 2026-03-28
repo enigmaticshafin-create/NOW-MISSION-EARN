@@ -40,10 +40,15 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
+    function isCeo() {
+      return isAuthenticated() && request.auth.token.email == "enigmaticshafin@gmail.com";
+    }
+
     function isAdmin() {
       return isAuthenticated() &&
-        (request.auth.token.email == "enigmaticshafin@gmail.com" || 
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+        (isCeo() || 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'moderator');
     }
 
     function hasOnlyAllowedFields(fields) {
@@ -66,7 +71,8 @@ service cloud.firestore {
       return data.uid is string && data.uid.size() > 0 &&
              data.email is string && isValidEmail(data.email) &&
              data.balance is number && data.balance >= 0 &&
-             data.role in ['admin', 'user'] &&
+             data.role in ['admin', 'user', 'moderator', 'ceo'] &&
+             (data.role != 'ceo' || data.email == 'enigmaticshafin@gmail.com') &&
              data.status in ['active', 'inactive', 'pending'] &&
              data.referralCode is string && data.referralCode.size() > 0 &&
              (!('referredBy' in data) || data.referredBy is string) &&
@@ -122,7 +128,9 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data);
-      allow update: if isAdmin() || (isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.role == resource.data.role && request.resource.data.balance == resource.data.balance);
+      allow update: if (isCeo() && isValidUser(request.resource.data)) || 
+                    (isAdmin() && resource.data.role != 'ceo' && request.resource.data.role == resource.data.role) ||
+                    (isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.role == resource.data.role && request.resource.data.balance == resource.data.balance);
     }
 
     match /referral_lookup/{code} {
@@ -150,6 +158,12 @@ service cloud.firestore {
     match /activationRequests/{requestId} {
       allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
       allow create: if isAuthenticated() && isValidActivationRequest(request.resource.data);
+      allow update: if isAdmin();
+    }
+
+    match /deposits/{depositId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow create: if isAuthenticated();
       allow update: if isAdmin();
     }
 

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { auth, db } from '../firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
 import { UserProfile } from '../types';
 import { handleFirestoreError, OperationType } from '../lib/firestore-errors';
 
@@ -29,9 +29,16 @@ export function useAuth() {
     const userDocRef = doc(db, 'users', user.uid);
     
     // Listen for profile changes
-    const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
+    const unsubscribe = onSnapshot(userDocRef, async (docSnap) => {
       if (docSnap.exists()) {
-        setProfile(docSnap.data() as UserProfile);
+        const data = docSnap.data() as UserProfile;
+        // Auto-upgrade CEO role if email matches
+        if (data.email === "enigmaticshafin@gmail.com" && data.role !== 'ceo') {
+          await updateDoc(userDocRef, { role: 'ceo' });
+          // The next snapshot will have the updated role
+        } else {
+          setProfile(data);
+        }
       } else {
         setProfile(null);
       }

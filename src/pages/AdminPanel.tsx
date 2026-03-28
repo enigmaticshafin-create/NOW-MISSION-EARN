@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { db, auth } from '../firebase';
 import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, increment, runTransaction, query, orderBy } from 'firebase/firestore';
-import { Mission, MissionSubmission, Withdrawal, UserProfile, ActivationRequest, PaymentSettings, GiftCode, LevelConfig } from '../types';
+import { Mission, MissionSubmission, Withdrawal, UserProfile, ActivationRequest, PaymentSettings, GiftCode, LevelConfig, DepositRequest } from '../types';
 import { 
   Plus, Check, X, Users as UsersIcon, ListTodo, Landmark, Eye, 
   ShieldCheck, AlertCircle, Clock, CheckCircle2, TrendingUp, 
@@ -19,12 +19,14 @@ export function AdminPanel() {
   const [missions, setMissions] = useState<Mission[]>([]);
   const [submissions, setSubmissions] = useState<MissionSubmission[]>([]);
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
+  const [deposits, setDeposits] = useState<DepositRequest[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [activationRequests, setActivationRequests] = useState<ActivationRequest[]>([]);
   const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>({ bKash: '', Nagad: '', Rocket: '', activationFee: 20 });
-  const [activeTab, setActiveTab] = useState<'submissions' | 'withdrawals' | 'activations' | 'missions' | 'users' | 'giftcodes' | 'levels' | 'settings'>('submissions');
+  const [activeTab, setActiveTab] = useState<'submissions' | 'withdrawals' | 'deposits' | 'activations' | 'missions' | 'users' | 'giftcodes' | 'levels' | 'settings'>('submissions');
   const [subFilter, setSubFilter] = useState<'pending' | 'approved' | 'rejected'>('pending');
   const [withFilter, setWithFilter] = useState<'pending' | 'completed' | 'rejected'>('pending');
+  const [depFilter, setDepFilter] = useState<'pending' | 'approved' | 'rejected'>('pending');
   const [actFilter, setActFilter] = useState<'pending' | 'approved' | 'rejected'>('pending');
   
   const [giftCodes, setGiftCodes] = useState<GiftCode[]>([]);
@@ -40,7 +42,7 @@ export function AdminPanel() {
   const [editingBalance, setEditingBalance] = useState<{ userId: string, amount: string } | null>(null);
 
   useEffect(() => {
-    if (loading || profile?.role !== 'admin') return;
+    if (loading || (profile?.role !== 'admin' && profile?.role !== 'moderator' && profile?.role !== 'ceo')) return;
 
     const unsubGiftCodes = onSnapshot(collection(db, 'giftCodes'), (snap) => {
       setGiftCodes(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any as GiftCode)));
@@ -98,6 +100,14 @@ export function AdminPanel() {
       }
     });
 
+    const unsubDeposits = onSnapshot(query(collection(db, 'deposits'), orderBy('submittedAt', 'desc')), (snap) => {
+      setDeposits(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as DepositRequest)));
+    }, (error) => {
+      if (auth.currentUser) {
+        handleFirestoreError(error, OperationType.GET, 'deposits');
+      }
+    });
+
     const unsubUsers = onSnapshot(query(collection(db, 'users'), orderBy('createdAt', 'desc')), (snap) => {
       setUsers(snap.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile)));
     }, (error) => {
@@ -128,6 +138,7 @@ export function AdminPanel() {
       unsubMissions();
       unsubSubmissions();
       unsubWithdrawals();
+      unsubDeposits();
       unsubUsers();
       unsubActivations();
       unsubSettings();
@@ -295,6 +306,7 @@ export function AdminPanel() {
   };
 
   const handleRejectWithdrawal = async (withdrawal: Withdrawal) => {
+    if (!window.confirm('Reject this withdrawal?')) return;
     try {
       await runTransaction(db, async (transaction) => {
         const withdrawalRef = doc(db, 'withdrawals', withdrawal.id);
@@ -303,18 +315,104 @@ export function AdminPanel() {
         transaction.update(withdrawalRef, { status: 'rejected' });
         transaction.update(userRef, { balance: increment(withdrawal.amount) });
       });
+      alert('Withdrawal rejected and balance refunded!');
     } catch (error) {
       console.error("Reject withdrawal error:", error);
     }
   };
 
-  const handleToggleUserStatus = async (userId: string, currentStatus: string) => {
+  const handleApproveDeposit = async (request: DepositRequest) => {
+    try {
+      await runTransaction(db, async (transaction) => {
+        const userRef = doc(db, 'users', request.userId);
+        const userSnap = await transaction.get(userRef);
+        if (userSnap.exists()) {
+          const userData = userSnap.data();
+          transaction.update(userRef, {
+            balance: (userData.balance || 0) + request.amount,
+            totalEarned: (userData.totalEarned || 0) + request.amount
+          });
+        }
+        transaction.update(doc(db, 'deposits', request.id), { status: 'approved' });
+      });
+      alert('Deposit approved and balance credited!');
+    } catch (error) {
+      console.error("Approve deposit error:", error);
+    }
+  };
+
+  const handleRejectDeposit = async (id: string) => {
+    if (!window.confirm('Reject this deposit request?')) return;
+    try {
+      await updateDoc(doc(db, 'deposits', id), { status: 'rejected' });
+      alert('Deposit rejected!');
+    } catch (error) {
+      console.error("Reject deposit error:", error);
+    }
+  };
+
+  const handleToggleUserStatus = async (userId: string, currentStatus: string, userRole?: string) => {
+    if (userRole === 'ceo') {
+      alert("CEO status cannot be changed.");
+      return;
+    }
+    if (userRole === 'admin' && profile?.role !== 'ceo') {
+      alert("Only the CEO can change admin status.");
+      return;
+    }
+    if (!window.confirm(`Are you sure you want to ${currentStatus === 'active' ? 'deactivate' : 'activate'} this user?`)) return;
     try {
       await updateDoc(doc(db, 'users', userId), {
         status: currentStatus === 'active' ? 'inactive' : 'active'
       });
+      alert('User status updated!');
     } catch (error) {
       console.error("Toggle user status error:", error);
+    }
+  };
+
+  const handleToggleUserRole = async (userId: string, currentRole: string) => {
+    if (profile?.role !== 'ceo') {
+      alert("Only the CEO can change user roles.");
+      return;
+    }
+
+    if (currentRole === 'ceo') {
+      alert("CEO role cannot be changed.");
+      return;
+    }
+
+    const roles: ('user' | 'moderator' | 'admin')[] = ['user', 'moderator', 'admin'];
+    const currentIndex = roles.indexOf(currentRole as any);
+    const nextIndex = (currentIndex + 1) % roles.length;
+    const nextRole = roles[nextIndex];
+
+    if (!window.confirm(`Are you sure you want to change this user's role to ${nextRole}?`)) return;
+    try {
+      await updateDoc(doc(db, 'users', userId), {
+        role: nextRole
+      });
+      alert(`User role updated to ${nextRole}!`);
+    } catch (error) {
+      console.error("Toggle user role error:", error);
+    }
+  };
+
+  const handleDeleteUser = async (userId: string, userRole?: string) => {
+    if (userRole === 'ceo') {
+      alert("CEO cannot be deleted.");
+      return;
+    }
+    if (profile?.role !== 'ceo') {
+      alert("Only the CEO can delete users.");
+      return;
+    }
+    if (!window.confirm('CRITICAL: Are you sure you want to PERMANENTLY DELETE this user? This action cannot be undone.')) return;
+    try {
+      await deleteDoc(doc(db, 'users', userId));
+      alert('User deleted successfully.');
+    } catch (error) {
+      console.error("Delete user error:", error);
     }
   };
 
@@ -373,7 +471,8 @@ export function AdminPanel() {
 
   const userMatches = users.filter(u => 
     u.userName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    u.email?.toLowerCase().includes(searchQuery.toLowerCase())
+    u.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    u.userId?.toLowerCase().includes(searchQuery.toLowerCase())
   ).length;
 
   const subMatches = submissions.filter(s => 
@@ -397,9 +496,16 @@ export function AdminPanel() {
     a.paymentNumber?.toLowerCase().includes(searchQuery.toLowerCase())
   ).length;
 
+  const depMatches = deposits.filter(d => 
+    d.userName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    d.transactionId?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    d.paymentNumber?.toLowerCase().includes(searchQuery.toLowerCase())
+  ).length;
+
   const filteredUsers = users.filter(u => 
     u.userName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    u.email?.toLowerCase().includes(searchQuery.toLowerCase())
+    u.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    u.userId?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const filteredSubmissions = submissions.filter(s => 
@@ -538,7 +644,7 @@ export function AdminPanel() {
           theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
         )}>
           <div className="flex min-w-max gap-1">
-            {(['submissions', 'withdrawals', 'activations', 'missions', 'users', 'giftcodes', 'levels', 'settings'] as const).map((tab) => (
+            {(['submissions', 'withdrawals', 'deposits', 'activations', 'missions', 'users', 'giftcodes', 'levels', 'settings'] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -551,6 +657,7 @@ export function AdminPanel() {
               >
                 {tab === 'submissions' && <ListTodo className="w-4 h-4" />}
                 {tab === 'withdrawals' && <Landmark className="w-4 h-4" />}
+                {tab === 'deposits' && <ArrowDownCircle className="w-4 h-4" />}
                 {tab === 'activations' && <ShieldCheck className="w-4 h-4" />}
                 {tab === 'missions' && <Eye className="w-4 h-4" />}
                 {tab === 'users' && <UsersIcon className="w-4 h-4" />}
@@ -565,6 +672,7 @@ export function AdminPanel() {
                   )}>
                     {tab === 'submissions' && subMatches}
                     {tab === 'withdrawals' && withMatches}
+                    {tab === 'deposits' && depMatches}
                     {tab === 'activations' && actMatches}
                     {tab === 'missions' && missionMatches}
                     {tab === 'users' && userMatches}
@@ -761,11 +869,14 @@ export function AdminPanel() {
                         </div>
                       </div>
                       <div className="space-y-3">
-                        <span className="font-black text-slate-500 uppercase text-[10px] tracking-[0.2em] block px-2">Payment Method & Details</span> 
+                        <span className="font-black text-slate-500 uppercase text-[10px] tracking-[0.2em] block px-2">Payment Method & Number</span> 
                         <div className={cn(
-                          "font-mono p-6 rounded-[1.5rem] border text-sm font-bold break-all",
+                          "font-mono p-6 rounded-[1.5rem] border text-sm font-bold flex items-center justify-between",
                           theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
-                        )}>{w.method}</div>
+                        )}>
+                          <span className="uppercase text-pink-500">{w.method}</span>
+                          <span className="tracking-widest">{w.paymentNumber}</span>
+                        </div>
                       </div>
                     </div>
                     {w.status === 'pending' && (
@@ -784,6 +895,98 @@ export function AdminPanel() {
                         </button>
                       </div>
                     )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'deposits' && (
+            <div className="space-y-6">
+              <div className="flex items-center gap-4 mb-8">
+                {(['pending', 'approved', 'rejected'] as const).map((f) => (
+                  <button
+                    key={f}
+                    onClick={() => setDepFilter(f)}
+                    className={cn(
+                      "px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all",
+                      depFilter === f 
+                        ? "bg-pink-500 text-white shadow-lg shadow-pink-500/20" 
+                        : "bg-slate-500/10 text-slate-500 hover:bg-slate-500/20"
+                    )}
+                  >
+                    {f} ({deposits.filter(d => d.status === f).length})
+                  </button>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-1 gap-6">
+                {deposits.filter(d => d.status === depFilter).map((d) => (
+                  <div key={d.id} className={cn(
+                    "rounded-[2.5rem] p-8 border flex flex-col md:flex-row items-center justify-between gap-8 transition-all hover:scale-[1.01]",
+                    theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
+                  )}>
+                    <div className="flex items-center gap-6">
+                      <div className="w-16 h-16 bg-blue-500/10 rounded-3xl flex items-center justify-center">
+                        <ArrowDownCircle className="w-8 h-8 text-blue-500" />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-black tracking-tight italic">{d.userName}</h3>
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">ID: {d.userSequentialId}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <Clock className="w-3 h-3 text-slate-400" />
+                          <span className="text-[10px] font-bold text-slate-400">{new Date(d.submittedAt).toLocaleString()}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-10">
+                      <div className="text-center">
+                        <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Method</div>
+                        <div className="text-sm font-black uppercase tracking-widest text-blue-500">{d.method}</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Number</div>
+                        <div className="text-sm font-black tracking-widest">{d.paymentNumber}</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Transaction ID</div>
+                        <div className="text-sm font-black tracking-widest text-blue-500">{d.transactionId}</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Amount</div>
+                        <div className="text-xl font-black text-blue-500 tracking-tighter italic">BDT {d.amount}</div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                      {d.screenshot && (
+                        <a 
+                          href={d.screenshot} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="p-4 rounded-2xl bg-slate-500/10 text-slate-500 hover:bg-slate-500 hover:text-white transition-all"
+                        >
+                          <Eye className="w-5 h-5" />
+                        </a>
+                      )}
+                      {d.status === 'pending' && (
+                        <>
+                          <button 
+                            onClick={() => handleApproveDeposit(d)}
+                            className="p-4 rounded-2xl bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white transition-all"
+                          >
+                            <Check className="w-5 h-5" />
+                          </button>
+                          <button 
+                            onClick={() => handleRejectDeposit(d.id)}
+                            className="p-4 rounded-2xl bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white transition-all"
+                          >
+                            <X className="w-5 h-5" />
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1407,6 +1610,21 @@ export function AdminPanel() {
                         <div className="text-xl font-black text-pink-500 tracking-tighter italic">${(u.balance || 0).toFixed(2)}</div>
                       </div>
                       <div className="text-center">
+                        <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Role</div>
+                        <button 
+                          onClick={() => handleToggleUserRole(u.uid, u.role)}
+                          className={cn(
+                            "text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full transition-all hover:scale-105",
+                            u.role === 'ceo' ? "bg-pink-500/10 text-pink-500 border border-pink-500/20" :
+                            u.role === 'admin' ? "bg-purple-500/10 text-purple-500 border border-purple-500/20" : 
+                            u.role === 'moderator' ? "bg-blue-500/10 text-blue-500 border border-blue-500/20" :
+                            "bg-slate-500/10 text-slate-500 border border-slate-500/10"
+                          )}
+                        >
+                          {u.role || 'user'}
+                        </button>
+                      </div>
+                      <div className="text-center">
                         <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Status</div>
                         <span className={cn(
                           "text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full",
@@ -1415,16 +1633,25 @@ export function AdminPanel() {
                           {u.status}
                         </span>
                       </div>
-                      <button 
-                        onClick={() => handleToggleUserStatus(u.uid, u.status)}
-                        className={cn(
-                          "p-4 rounded-2xl transition-all active:scale-95",
-                          u.status === 'active' ? "bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white" : "bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white"
-                        )}
-                        title={u.status === 'active' ? 'Deactivate User' : 'Activate User'}
-                      >
-                        {u.status === 'active' ? <Ban className="w-5 h-5" /> : <UserPlus className="w-5 h-5" />}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={() => handleToggleUserStatus(u.uid, u.status, u.role)}
+                          className={cn(
+                            "p-4 rounded-2xl transition-all active:scale-95",
+                            u.status === 'active' ? "bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white" : "bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white"
+                          )}
+                          title={u.status === 'active' ? 'Deactivate User' : 'Activate User'}
+                        >
+                          {u.status === 'active' ? <Ban className="w-5 h-5" /> : <UserPlus className="w-5 h-5" />}
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteUser(u.uid, u.role)}
+                          className="p-4 rounded-2xl bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white transition-all active:scale-95"
+                          title="Delete User"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}

@@ -36,9 +36,9 @@ export function Register() {
     setLoading(true);
     setError(null);
     try {
-      // Admin email bypass
+      // CEO email bypass
       if (referBy === "enigmaticshafin@gmail.com") {
-        setReferrerUserId("00000001");
+        setReferrerUserId("0000001");
         setStep(2);
         setLoading(false);
         return;
@@ -97,8 +97,8 @@ export function Register() {
           return count;
         });
 
-        const formattedId = nextId.toString().padStart(8, '0');
-        const isAdmin = user.email === "enigmaticshafin@gmail.com";
+        const formattedId = nextId.toString().padStart(7, '0');
+        const isCeo = user.email === "enigmaticshafin@gmail.com";
         const myReferralCode = formattedId;
 
         await setDoc(doc(db, 'users', user.uid), {
@@ -125,7 +125,7 @@ export function Register() {
           totalWithdraw: 0,
           referrals: 0,
           level: 1,
-          role: isAdmin ? 'admin' : 'user',
+          role: isCeo ? 'ceo' : 'user',
           referralCode: myReferralCode,
           referredBy: referrerUserId || referBy,
           status: 'active',

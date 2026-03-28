@@ -23,7 +23,7 @@ export interface UserProfile {
   adsEarnings?: number;
   totalWithdraw?: number;
   referrals?: number;
-  role: 'admin' | 'user';
+  role: 'admin' | 'user' | 'moderator' | 'ceo';
   status: 'active' | 'inactive' | 'pending';
   referralCode: string;
   referredBy?: string;
@@ -63,7 +63,22 @@ export interface Withdrawal {
   amount: number;
   status: 'pending' | 'completed' | 'rejected';
   method: string;
+  paymentNumber: string;
   requestedAt: string;
+}
+
+export interface DepositRequest {
+  id: string;
+  userId: string;
+  userName?: string;
+  userSequentialId?: string;
+  method: 'bkash' | 'nagad' | 'rocket';
+  amount: number;
+  transactionId: string;
+  paymentNumber: string;
+  screenshot: string;
+  status: 'pending' | 'approved' | 'rejected';
+  submittedAt: string;
 }
 
 export interface ActivationRequest {

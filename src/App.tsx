@@ -160,10 +160,10 @@ function AppContent() {
               </div>
             ))}
             
-            {profile?.role === 'admin' && (
+            {(profile?.role === 'admin' || profile?.role === 'moderator' || profile?.role === 'ceo') && (
               <div className="space-y-2 pt-4 border-t border-[#303456]">
                 <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-2">
-                  Admin
+                  {profile?.role === 'ceo' ? 'CEO' : 'Admin'}
                 </h3>
                 <Link
                   to="/admin"
@@ -179,7 +179,7 @@ function AppContent() {
                   )}
                 >
                   <ShieldCheck className="w-4 h-4" />
-                  Admin Panel
+                  {profile?.role === 'ceo' ? 'CEO Panel' : 'Admin Panel'}
                 </Link>
               </div>
             )}
@@ -228,7 +228,25 @@ function AppContent() {
           </div>
 
           <div className="flex items-center gap-4">
+            {user && (
+              <Link 
+                to="/" 
+                className="hidden sm:flex items-center gap-2 bg-emerald-500 text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-500/20 hover:scale-105 transition-all"
+              >
+                <ListTodo className="w-3 h-3" />
+                Now Mission
+              </Link>
+            )}
             <Timer />
+            {user && (profile?.role === 'admin' || profile?.role === 'moderator' || profile?.role === 'ceo') && (
+              <Link 
+                to="/admin" 
+                className="hidden sm:flex items-center gap-2 bg-pink-500 text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-pink-500/20 hover:scale-105 transition-all"
+              >
+                <ShieldCheck className="w-3 h-3" />
+                {profile.role === 'ceo' ? 'CEO Panel' : profile.role === 'admin' ? 'Admin Panel' : 'Moderator Panel'}
+              </Link>
+            )}
             <button 
               onClick={toggleTheme}
               className={cn(
@@ -261,7 +279,7 @@ function AppContent() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/profile" element={user ? <Profile /> : <Navigate to="/login" />} />
-            <Route path="/admin" element={user && profile?.role === 'admin' ? <AdminPanel /> : <Navigate to="/" />} />
+            <Route path="/admin" element={user && (profile?.role === 'admin' || profile?.role === 'moderator' || profile?.role === 'ceo') ? <AdminPanel /> : <Navigate to="/" />} />
             <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
             <Route path="/register" element={!user ? <Register /> : <Navigate to="/" />} />
             <Route path="/my-jobs" element={user ? <MyJobs /> : <Navigate to="/login" />} />
