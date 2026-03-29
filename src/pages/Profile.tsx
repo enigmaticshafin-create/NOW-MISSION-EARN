@@ -36,7 +36,7 @@ export const Profile: React.FC = () => {
   useEffect(() => {
     if (!user || !profile?.userId) return;
 
-    const rQ = query(collection(db, 'users'), where('referBy', '==', profile.userId), where('status', '==', 'active'));
+    const rQ = query(collection(db, 'users'), where('referredBy', '==', profile.userId), where('status', '==', 'active'));
     const unsubReferrals = onSnapshot(rQ, (snap) => {
       setReferralCount(snap.size);
     }, (error) => {

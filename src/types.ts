@@ -152,4 +152,5 @@ export interface DynamicSettings {
   welcomeText: string;
   footerQuote: string;
   quoteAuthor: string;
+  footerText: string;
 }

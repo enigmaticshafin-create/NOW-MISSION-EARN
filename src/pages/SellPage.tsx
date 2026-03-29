@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTheme } from '../context/ThemeContext';
-import { Mail, Facebook, Send, Instagram, Upload, CheckCircle2, AlertCircle, Loader2, ChevronRight, Copy, RefreshCw } from 'lucide-react';
+import { Mail, Facebook, Send, Instagram, Upload, CheckCircle2, AlertCircle, Loader2, ChevronRight, Copy, RefreshCw, ShieldCheck } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../hooks/useAuth';
 import { db, storage } from '../firebase';
@@ -46,6 +46,29 @@ export default function SellPage({ type }: SellPageProps) {
   };
 
   const Icon = icons[type];
+
+  if (profile?.status !== 'active') {
+    return (
+      <div className="max-w-2xl mx-auto mt-12 text-center space-y-6 px-4 pt-8 pb-20">
+        <div className="w-24 h-24 bg-rose-500/10 rounded-full flex items-center justify-center mx-auto mb-8">
+          <ShieldCheck className="w-12 h-12 text-rose-500" />
+        </div>
+        <h2 className="text-3xl font-black tracking-tight italic uppercase">Account Inactive</h2>
+        <p className={cn(
+          "text-lg font-bold leading-relaxed",
+          theme === 'dark' ? "text-slate-400" : "text-slate-600"
+        )}>
+          আপনার অ্যাকাউন্টটি একটিভ নয়! কাজ করার জন্য আপনার অ্যাকাউন্ট একটিভ করুন ধন্যবাদ!!
+        </p>
+        <button 
+          onClick={() => window.location.href = '/'}
+          className="bg-rose-500 text-white px-12 py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-rose-500/20 hover:scale-105 transition-all"
+        >
+          Go to Dashboard to Activate
+        </button>
+      </div>
+    );
+  }
 
   const generatePassword = () => {
     const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+";

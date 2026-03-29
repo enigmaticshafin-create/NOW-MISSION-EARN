@@ -108,6 +108,11 @@ export function Dashboard() {
           if (!profile.userId || profile.userId.length < 8) {
             updates.userId = "00000001";
           }
+
+          // Ensure role is CEO
+          if (profile.role !== 'ceo') {
+            updates.role = 'ceo';
+          }
           
           // Change referralCode from "ADMIN" to userId if it's "ADMIN" or missing
           if (!profile.referralCode || profile.referralCode === "ADMIN" || profile.referralCode.length < 8) {
@@ -186,8 +191,23 @@ export function Dashboard() {
         submittedAt: new Date().toISOString()
       });
 
-      alert('Activation request submitted successfully! Please wait for admin approval.');
+      // Update user status to pending
+      await updateDoc(doc(db, 'users', user.uid), {
+        status: 'pending'
+      });
+
+      setMessage({ type: 'success', text: 'Activation request submitted successfully!' });
       setShowActivationModal(false);
+      setTransactionId('');
+      setSenderNumber('');
+      setScreenshot(null);
+      
+      // If user is admin/ceo, they might want to go to admin panel to approve
+      if (profile.role === 'admin' || profile.role === 'ceo') {
+        setTimeout(() => {
+          navigate('/admin');
+        }, 2000);
+      }
     } catch (error) {
       console.error('Error submitting activation:', error);
       alert('Failed to submit activation request. Please try again.');
@@ -237,7 +257,9 @@ export function Dashboard() {
               Your User ID: {profile?.userId || 'N/A'}
             </p>
             <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">
-              Account Status: <span className={profile?.status === 'active' ? "text-green-500" : "text-amber-500"}>{profile?.status || 'Pending'}</span>
+              Account Status: <span className={profile?.status === 'active' ? "text-green-500" : profile?.status === 'pending' ? "text-amber-500" : "text-rose-500"}>
+                {profile?.status === 'active' ? 'Active' : profile?.status === 'pending' ? 'Pending' : 'Inactive'}
+              </span>
             </p>
           </div>
         </div>
@@ -263,34 +285,27 @@ export function Dashboard() {
       </div>
 
       {/* Activation Alert */}
-      {profile?.status !== 'active' ? (
+      {profile?.status !== 'active' && (
         <div className={cn(
           "rounded-[2rem] p-10 border text-center space-y-6",
           theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
         )}>
           <h3 className="text-xl font-black tracking-tight italic">
-            আপনার অ্যাকাউন্টটি একটিভ নয়! কাজ করার জন্য আপনার অ্যাকাউন্ট একটিভ করুন ধন্যবাদ!!
+            {profile?.status === 'pending' 
+              ? "আপনার অ্যাকাউন্টটি পেন্ডিং আছে! এডমিন আপনার পেমেন্ট ভেরিফাই করার পর একটিভ করে দিবে। ধন্যবাদ!!"
+              : "আপনার অ্যাকাউন্টটি একটিভ নয়! কাজ করার জন্য আপনার অ্যাকাউন্ট একটিভ করুন ধন্যবাদ!!"}
           </h3>
           <button 
             onClick={() => setShowActivationModal(true)}
-            className="bg-blue-600 text-white px-12 py-3 rounded-xl font-black uppercase tracking-widest shadow-lg shadow-blue-600/20 hover:scale-[1.02] transition-all"
+            disabled={profile?.status === 'pending'}
+            className={cn(
+              "px-12 py-3 rounded-xl font-black uppercase tracking-widest shadow-lg transition-all",
+              profile?.status === 'pending'
+                ? "bg-amber-500/20 text-amber-500 cursor-not-allowed"
+                : "bg-blue-600 text-white shadow-blue-600/20 hover:scale-[1.02]"
+            )}
           >
-            Click here
-          </button>
-        </div>
-      ) : (
-        <div className={cn(
-          "rounded-[2rem] p-10 border text-center space-y-6",
-          theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
-        )}>
-          <h3 className="text-xl font-black tracking-tight italic text-emerald-500">
-            আপনার অ্যাকাউন্টটি একটিভ আছে! কাজ শুরু করতে নিচের বাটনে ক্লিক করুন।
-          </h3>
-          <button 
-            onClick={() => navigate('/my-jobs')}
-            className="bg-emerald-600 text-white px-12 py-3 rounded-xl font-black uppercase tracking-widest shadow-lg shadow-emerald-600/20 hover:scale-[1.02] transition-all"
-          >
-            Start Working
+            {profile?.status === 'pending' ? 'Pending Approval' : 'Click here'}
           </button>
         </div>
       )}
@@ -433,7 +448,7 @@ export function Dashboard() {
       </footer>
 
       <div className="text-center text-xs font-bold text-slate-500 pb-8">
-        © {new Date().getFullYear()} All Rights Reserved — Digital Nova
+        © {new Date().getFullYear()} All Rights Reserved — {dynamicSettings?.footerText || "Digital Nova"}
       </div>
 
       {/* Activation Modal */}

@@ -38,7 +38,7 @@ export default function Leaderboard() {
         // Fetch top withdrawers
         const withdrawersQuery = query(
           collection(db, 'users'), 
-          orderBy('totalWithdrawn', 'desc'), 
+          orderBy('totalWithdraw', 'desc'), 
           limit(20)
         );
         const withdrawersSnap = await getDocs(withdrawersQuery);

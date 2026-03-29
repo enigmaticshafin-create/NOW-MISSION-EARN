@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { db, auth } from '../firebase';
-import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, increment, runTransaction, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, increment, runTransaction, query, orderBy, writeBatch, getDocs, setDoc } from 'firebase/firestore';
 import { Mission, MissionSubmission, Withdrawal, UserProfile, ActivationRequest, PaymentSettings, GiftCode, LevelConfig, DepositRequest, SocialSellSubmission, DynamicSettings } from '../types';
 import { 
   Plus, Check, X, Users as UsersIcon, ListTodo, Landmark, Eye, 
   ShieldCheck, AlertCircle, Clock, CheckCircle2, TrendingUp, 
   UserPlus, Ban, Search, Filter, ArrowUpRight, History, Trash2, Edit3, ExternalLink, DollarSign, Settings as SettingsIcon, Save,
-  Gift, Award, ArrowDownCircle, ArrowUpCircle, Copy, XCircle, Share2, Smartphone
+  Gift, Award, ArrowDownCircle, ArrowUpCircle, Copy, XCircle, Share2, Smartphone, ShieldAlert, Loader2
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useTheme } from '../context/ThemeContext';
@@ -41,7 +41,8 @@ export function AdminPanel() {
     welcomeTitle: 'Welcome to our website',
     welcomeText: 'We are here to help you earn money online.',
     footerQuote: 'This should be used to tell a story and include any friend you might receive money and service for your teams.',
-    quoteAuthor: 'Shoaiba Islam'
+    quoteAuthor: 'Shoaiba Islam',
+    footerText: 'Digital Nova'
   });
   const [newGiftCode, setNewGiftCode] = useState({ code: '', amount: '', maxUses: '' });
   const [newLevel, setNewLevel] = useState({ level: '', name: '', minReferrals: '' });
@@ -58,6 +59,7 @@ export function AdminPanel() {
     balance: '0',
     status: 'active' as UserProfile['status']
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   useEffect(() => {
@@ -249,14 +251,28 @@ export function AdminPanel() {
 
   const handleUpdateWithdrawSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    await updateDoc(doc(db, 'settings', 'withdraw'), withdrawSettings);
-    alert('Withdrawal settings updated!');
+    setIsSubmitting(true);
+    try {
+      await setDoc(doc(db, 'settings', 'withdraw'), withdrawSettings, { merge: true });
+      setMessage({ type: 'success', text: 'Withdrawal settings updated!' });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'settings/withdraw');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleUpdateDepositSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    await updateDoc(doc(db, 'settings', 'payment'), depositSettings);
-    alert('Deposit settings updated!');
+    setIsSubmitting(true);
+    try {
+      await setDoc(doc(db, 'settings', 'payment'), depositSettings, { merge: true });
+      setMessage({ type: 'success', text: 'Deposit settings updated!' });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'settings/payment');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleUpdatePaymentSettings = async (e: React.FormEvent) => {
@@ -265,21 +281,27 @@ export function AdminPanel() {
       setMessage({ type: 'error', text: 'Only CEO can update payment settings' });
       return;
     }
+    setIsSubmitting(true);
     try {
-      await updateDoc(doc(db, 'settings', 'paymentNumbers'), paymentSettings as any);
-      alert('Activation settings updated successfully!');
+      await setDoc(doc(db, 'settings', 'paymentNumbers'), paymentSettings as any, { merge: true });
+      setMessage({ type: 'success', text: 'Activation settings updated successfully!' });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'settings/paymentNumbers');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleUpdateDynamicSettings = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
     try {
-      await updateDoc(doc(db, 'dynamicSettings', 'main'), dynamicSettings as any);
-      alert('Dynamic settings updated successfully!');
+      await setDoc(doc(db, 'dynamicSettings', 'main'), dynamicSettings as any, { merge: true });
+      setMessage({ type: 'success', text: 'Dynamic settings updated successfully!' });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'dynamicSettings/main');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -340,8 +362,8 @@ export function AdminPanel() {
   const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser) return;
-    if (profile?.role !== 'ceo') {
-      alert("Only the CEO can edit user details.");
+    if (profile?.role !== 'ceo' && profile?.role !== 'admin') {
+      alert("Only the CEO or Admin can edit user details.");
       return;
     }
 
@@ -582,6 +604,50 @@ export function AdminPanel() {
       await updateDoc(doc(db, 'activationRequests', id), { status: 'rejected' });
     } catch (error) {
       console.error("Reject activation error:", error);
+    }
+  };
+
+  const handleDeactivateAll = async () => {
+    if (profile?.role !== 'ceo') {
+      alert("Only the CEO can perform this action.");
+      return;
+    }
+
+    if (!window.confirm("Are you sure you want to deactivate ALL users? This will set everyone's status to 'inactive' and they will need to pay for activation again.")) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const usersSnap = await getDocs(collection(db, 'users'));
+      const batch = writeBatch(db);
+      let count = 0;
+      
+      for (const userDoc of usersSnap.docs) {
+        const userData = userDoc.data();
+        // Don't deactivate the CEO or admins if needed, but usually just CEO
+        if (userData.role !== 'ceo') {
+          batch.update(userDoc.ref, { status: 'inactive' });
+          count++;
+          
+          // Firestore batch limit is 500
+          if (count >= 450) {
+            await batch.commit();
+            count = 0;
+          }
+        }
+      }
+
+      if (count > 0) {
+        await batch.commit();
+      }
+      
+      alert("All users have been deactivated successfully.");
+    } catch (error) {
+      console.error("Error deactivating users:", error);
+      alert("Failed to deactivate users.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -1158,21 +1224,35 @@ export function AdminPanel() {
 
           {activeTab === 'activations' && (
             <div className="space-y-6">
-              <div className="flex gap-2">
-                {(['pending', 'approved', 'rejected'] as const).map(f => (
-                  <button
-                    key={f}
-                    onClick={() => setActFilter(f)}
+              <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                <div className="flex gap-2">
+                  {(['pending', 'approved', 'rejected'] as const).map(f => (
+                    <button
+                      key={f}
+                      onClick={() => setActFilter(f)}
+                      className={cn(
+                        "px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all",
+                        actFilter === f 
+                          ? "bg-pink-500 border-pink-500 text-white" 
+                          : theme === 'dark' ? "border-[#303456] text-slate-500 hover:border-pink-500" : "border-slate-200 text-slate-400 hover:border-pink-500"
+                      )}
+                    >
+                      {f} ({activationRequests.filter(a => a.status === f).length})
+                    </button>
+                  ))}
+                </div>
+                <div className="relative w-full md:w-72">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search by Email or ID..."
                     className={cn(
-                      "px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all",
-                      actFilter === f 
-                        ? "bg-pink-500 border-pink-500 text-white" 
-                        : theme === 'dark' ? "border-[#303456] text-slate-500 hover:border-pink-500" : "border-slate-200 text-slate-400 hover:border-pink-500"
+                      "w-full pl-12 pr-4 py-3 rounded-2xl border outline-none focus:ring-2 focus:ring-pink-500/20 transition-all text-sm font-bold",
+                      theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
                     )}
-                  >
-                    {f}
-                  </button>
-                ))}
+                  />
+                </div>
               </div>
 
               <div className="grid gap-6">
@@ -1557,8 +1637,13 @@ export function AdminPanel() {
                         />
                       </div>
                     </div>
-                    <button type="submit" className="w-full bg-pink-500 text-white font-black py-4 rounded-2xl shadow-lg shadow-pink-500/20 uppercase tracking-widest text-xs flex items-center justify-center gap-2">
-                      <Save className="w-4 h-4" /> Save Activation Settings
+                    <button 
+                      type="submit" 
+                      disabled={isSubmitting}
+                      className="w-full bg-pink-500 text-white font-black py-4 rounded-2xl shadow-lg shadow-pink-500/20 uppercase tracking-widest text-xs flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                      Save Activation Settings
                     </button>
                   </form>
                 </div>
@@ -1573,48 +1658,53 @@ export function AdminPanel() {
                     <p className="text-slate-500 font-black uppercase tracking-[0.2em] text-[10px]">Numbers where agents send money for deposits</p>
                   </div>
 
-                  <form onSubmit={handleUpdateDepositSettings} className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">bKash (Deposit)</label>
-                      <input 
-                        value={depositSettings.bkash}
-                        onChange={e => setDepositSettings({...depositSettings, bkash: e.target.value})}
-                        placeholder="017XXXXXXXX"
-                        className={cn(
-                          "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500",
-                          theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
-                        )}
-                      />
+                  <form onSubmit={handleUpdateDepositSettings} className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">bKash (Deposit)</label>
+                        <input 
+                          value={depositSettings.bkash}
+                          onChange={e => setDepositSettings({...depositSettings, bkash: e.target.value})}
+                          placeholder="017XXXXXXXX"
+                          className={cn(
+                            "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500",
+                            theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
+                          )}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Nagad (Deposit)</label>
+                        <input 
+                          value={depositSettings.nagad}
+                          onChange={e => setDepositSettings({...depositSettings, nagad: e.target.value})}
+                          placeholder="017XXXXXXXX"
+                          className={cn(
+                            "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500",
+                            theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
+                          )}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Rocket (Deposit)</label>
+                        <input 
+                          value={depositSettings.rocket}
+                          onChange={e => setDepositSettings({...depositSettings, rocket: e.target.value})}
+                          placeholder="017XXXXXXXX"
+                          className={cn(
+                            "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500",
+                            theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
+                          )}
+                        />
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Nagad (Deposit)</label>
-                      <input 
-                        value={depositSettings.nagad}
-                        onChange={e => setDepositSettings({...depositSettings, nagad: e.target.value})}
-                        placeholder="017XXXXXXXX"
-                        className={cn(
-                          "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500",
-                          theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
-                        )}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Rocket (Deposit)</label>
-                      <input 
-                        value={depositSettings.rocket}
-                        onChange={e => setDepositSettings({...depositSettings, rocket: e.target.value})}
-                        placeholder="017XXXXXXXX"
-                        className={cn(
-                          "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500",
-                          theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
-                        )}
-                      />
-                    </div>
-                    <div className="md:col-span-3">
-                      <button type="submit" className="w-full bg-pink-500 text-white font-black py-4 rounded-2xl shadow-lg shadow-pink-500/20 uppercase tracking-widest text-xs flex items-center justify-center gap-2">
-                        <Save className="w-4 h-4" /> Save Deposit Numbers
-                      </button>
-                    </div>
+                    <button 
+                      type="submit" 
+                      disabled={isSubmitting}
+                      className="w-full bg-pink-500 text-white font-black py-4 rounded-2xl shadow-lg shadow-pink-500/20 uppercase tracking-widest text-xs flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                      Save Deposit Settings
+                    </button>
                   </form>
                 </div>
               </div>
@@ -1661,8 +1751,13 @@ export function AdminPanel() {
                         />
                       </div>
                     </div>
-                    <button type="submit" className="w-full bg-pink-500 text-white font-black py-4 rounded-2xl shadow-lg shadow-pink-500/20 uppercase tracking-widest text-xs flex items-center justify-center gap-2">
-                      <Save className="w-4 h-4" /> Save Withdrawal Limits
+                    <button 
+                      type="submit" 
+                      disabled={isSubmitting}
+                      className="w-full bg-pink-500 text-white font-black py-4 rounded-2xl shadow-lg shadow-pink-500/20 uppercase tracking-widest text-xs flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                      Save Withdrawal Limits
                     </button>
                   </form>
                 </div>
@@ -1735,9 +1830,9 @@ export function AdminPanel() {
                       </div>
                     </div>
 
-                    {/* Welcome Text */}
+                    {/* Site Content Settings */}
                     <div className="space-y-6">
-                      <h4 className="text-sm font-black uppercase tracking-widest text-pink-500 italic">Welcome Content</h4>
+                      <h4 className="text-sm font-black uppercase tracking-widest text-pink-500 italic">Site Content</h4>
                       <div className="space-y-4">
                         <div className="space-y-2">
                           <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Welcome Title</label>
@@ -1755,7 +1850,7 @@ export function AdminPanel() {
                           <textarea 
                             value={dynamicSettings.welcomeText}
                             onChange={e => setDynamicSettings({...dynamicSettings, welcomeText: e.target.value})}
-                            rows={3}
+                            rows={4}
                             className={cn(
                               "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500 resize-none",
                               theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
@@ -1763,19 +1858,7 @@ export function AdminPanel() {
                           />
                         </div>
                         <div className="space-y-2">
-                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Footer Quote</label>
-                          <textarea 
-                            value={dynamicSettings.footerQuote}
-                            onChange={e => setDynamicSettings({...dynamicSettings, footerQuote: e.target.value})}
-                            rows={2}
-                            className={cn(
-                              "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500 resize-none",
-                              theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
-                            )}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Quote Author</label>
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Author Name</label>
                           <input 
                             value={dynamicSettings.quoteAuthor}
                             onChange={e => setDynamicSettings({...dynamicSettings, quoteAuthor: e.target.value})}
@@ -1785,11 +1868,69 @@ export function AdminPanel() {
                             )}
                           />
                         </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Footer Quote</label>
+                          <textarea 
+                            value={dynamicSettings.footerQuote}
+                            onChange={e => setDynamicSettings({...dynamicSettings, footerQuote: e.target.value})}
+                            rows={3}
+                            className={cn(
+                              "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500 resize-none",
+                              theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
+                            )}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Footer Copyright Text</label>
+                          <input 
+                            value={dynamicSettings.footerText}
+                            onChange={e => setDynamicSettings({...dynamicSettings, footerText: e.target.value})}
+                            className={cn(
+                              "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500",
+                              theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
+                            )}
+                          />
+                        </div>
                       </div>
                     </div>
+
+                    {/* Danger Zone */}
+                    {profile?.role === 'ceo' && (
+                      <div className="space-y-6 pt-6 border-t border-rose-500/20">
+                        <h4 className="text-sm font-black uppercase tracking-widest text-rose-500 italic">Danger Zone</h4>
+                        <div className="p-6 rounded-3xl bg-rose-500/5 border border-rose-500/20 space-y-4">
+                          <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 bg-rose-500/10 rounded-2xl flex items-center justify-center">
+                              <ShieldAlert className="w-6 h-6 text-rose-500" />
+                            </div>
+                            <div>
+                              <h5 className="text-sm font-black uppercase tracking-tight italic">Deactivate All Users</h5>
+                              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Reset all account statuses to inactive</p>
+                            </div>
+                          </div>
+                          <p className="text-xs font-medium text-slate-500">
+                            This will set the status of all users (except CEO) to 'inactive'. Users will need to pay the activation fee again to become active.
+                          </p>
+                          <button 
+                            type="button"
+                            onClick={handleDeactivateAll}
+                            disabled={isSubmitting}
+                            className="w-full bg-rose-500 text-white font-black py-4 rounded-2xl shadow-lg shadow-rose-500/20 uppercase tracking-widest text-xs flex items-center justify-center gap-2 hover:bg-rose-600 transition-colors disabled:opacity-50"
+                          >
+                            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldAlert className="w-4 h-4" />}
+                            Deactivate All Users
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <button type="submit" className="w-full bg-pink-500 text-white font-black py-4 rounded-2xl shadow-lg shadow-pink-500/20 uppercase tracking-widest text-xs flex items-center justify-center gap-2">
-                    <Save className="w-4 h-4" /> Save Site Content
+                  <button 
+                    type="submit" 
+                    disabled={isSubmitting}
+                    className="w-full bg-pink-500 text-white font-black py-4 rounded-2xl shadow-lg shadow-pink-500/20 uppercase tracking-widest text-xs flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    Save Site Content
                   </button>
                 </form>
               </div>
@@ -2092,7 +2233,7 @@ export function AdminPanel() {
                             </div>
                           )}
                           <div className="text-[9px] font-black text-pink-400 uppercase tracking-widest mt-1">
-                            Team Size: {users.filter(ref => ref.referredBy === u.userId).length} Agents • Joined: {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : 'N/A'}
+                            Team Size: {u.referrals || 0} Active Agents • Joined: {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : 'N/A'}
                           </div>
                         </div>
                       </div>
