@@ -128,7 +128,7 @@ export function Register() {
           role: isCeo ? 'ceo' : 'user',
           referralCode: myReferralCode,
           referredBy: referrerUserId || referBy,
-          status: 'active',
+          status: isCeo ? 'active' : 'inactive',
           createdAt: new Date().toISOString(),
         });
 

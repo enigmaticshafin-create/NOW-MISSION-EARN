@@ -459,7 +459,20 @@ export function Dashboard() {
                 "p-4 rounded-2xl border space-y-2",
                 theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
               )}>
-                <p className="text-sm font-black uppercase tracking-widest text-pink-500">Activation Fee: BDT {paymentSettings?.activationFee || 20}</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-black uppercase tracking-widest text-pink-500">Activation Fee: BDT {paymentSettings?.activationFee || 20}</p>
+                  <button 
+                    onClick={() => {
+                      const fee = (paymentSettings?.activationFee || 20).toString();
+                      navigator.clipboard.writeText(fee);
+                      setMessage({ type: 'success', text: 'Amount copied!' });
+                    }}
+                    className="p-2 bg-pink-500/10 text-pink-500 rounded-lg hover:bg-pink-500 hover:text-white transition-all"
+                    title="Copy Amount"
+                  >
+                    <Copy className="w-3 h-3" />
+                  </button>
+                </div>
                 <p className="text-xs font-bold text-slate-500">Please send the exact amount to one of our numbers below.</p>
               </div>
 

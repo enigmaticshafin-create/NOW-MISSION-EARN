@@ -6,7 +6,7 @@ import {
   Plus, Check, X, Users as UsersIcon, ListTodo, Landmark, Eye, 
   ShieldCheck, AlertCircle, Clock, CheckCircle2, TrendingUp, 
   UserPlus, Ban, Search, Filter, ArrowUpRight, History, Trash2, Edit3, ExternalLink, DollarSign, Settings as SettingsIcon, Save,
-  Gift, Award, ArrowDownCircle, ArrowUpCircle, Copy, XCircle, Share2
+  Gift, Award, ArrowDownCircle, ArrowUpCircle, Copy, XCircle, Share2, Smartphone
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useTheme } from '../context/ThemeContext';
@@ -23,7 +23,7 @@ export function AdminPanel() {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [activationRequests, setActivationRequests] = useState<ActivationRequest[]>([]);
   const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>({ bKash: '', Nagad: '', Rocket: '', activationFee: 20 });
-  const [activeTab, setActiveTab] = useState<'submissions' | 'withdrawals' | 'deposits' | 'activations' | 'missions' | 'users' | 'giftcodes' | 'levels' | 'settings' | 'socialsells'>('users');
+  const [activeTab, setActiveTab] = useState<'submissions' | 'withdrawals' | 'deposits' | 'activations' | 'missions' | 'users' | 'giftcodes' | 'levels' | 'settings' | 'socialsells' | 'addnumber'>('users');
   const [subFilter, setSubFilter] = useState<'pending' | 'approved' | 'rejected'>('pending');
   const [withFilter, setWithFilter] = useState<'pending' | 'completed' | 'rejected'>('pending');
   const [depFilter, setDepFilter] = useState<'pending' | 'approved' | 'rejected'>('pending');
@@ -51,7 +51,13 @@ export function AdminPanel() {
   const [showAddMission, setShowAddMission] = useState(false);
   const [editingMission, setEditingMission] = useState<Mission | null>(null);
   const [newMission, setNewMission] = useState({ title: '', description: '', reward: '', category: '', link: '' });
-  const [editingBalance, setEditingBalance] = useState<{ userId: string, amount: string } | null>(null);
+  const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
+  const [editForm, setEditForm] = useState({
+    userId: '',
+    role: 'user' as UserProfile['role'],
+    balance: '0',
+    status: 'active' as UserProfile['status']
+  });
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   useEffect(() => {
@@ -255,6 +261,10 @@ export function AdminPanel() {
 
   const handleUpdatePaymentSettings = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (profile?.role !== 'ceo') {
+      setMessage({ type: 'error', text: 'Only CEO can update payment settings' });
+      return;
+    }
     try {
       await updateDoc(doc(db, 'settings', 'paymentNumbers'), paymentSettings as any);
       alert('Activation settings updated successfully!');
@@ -327,30 +337,64 @@ export function AdminPanel() {
     }
   };
 
-  const handleUpdateUserRole = async (uid: string, newRole: 'admin' | 'moderator' | 'user') => {
+  const handleUpdateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
     if (profile?.role !== 'ceo') {
-      alert('Only CEO can change user roles.');
+      alert("Only the CEO can edit user details.");
       return;
     }
-    if (!window.confirm(`Are you sure you want to change this user's role to ${newRole}?`)) return;
-    try {
-      await updateDoc(doc(db, 'users', uid), { role: newRole });
-      alert('User role updated successfully!');
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `users/${uid}`);
-    }
-  };
 
-  const handleUpdateBalance = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingBalance) return;
+    const newId = editForm.userId;
+    const currentId = editingUser.userId || '';
+    const newRole = editForm.role;
+    const newBalance = parseFloat(editForm.balance);
+    const newStatus = editForm.status;
+
+    if (!/^\d{8}$/.test(newId)) {
+      alert("ID must be exactly 8 digits.");
+      return;
+    }
+
     try {
-      await updateDoc(doc(db, 'users', editingBalance.userId), {
-        balance: parseFloat(editingBalance.amount)
+      await runTransaction(db, async (transaction) => {
+        const userRef = doc(db, 'users', editingUser.uid);
+        
+        // If ID changed, update referral_lookup
+        if (newId !== currentId) {
+          const lookupRef = doc(db, 'referral_lookup', newId);
+          const oldLookupRef = doc(db, 'referral_lookup', currentId);
+          
+          const lookupDoc = await transaction.get(lookupRef);
+          if (lookupDoc.exists() && lookupDoc.data().uid !== editingUser.uid) {
+            throw new Error("User ID already in use.");
+          }
+
+          transaction.set(lookupRef, {
+            uid: editingUser.uid,
+            userName: editingUser.userName,
+            userId: newId
+          });
+
+          if (currentId) {
+            transaction.delete(oldLookupRef);
+          }
+        }
+
+        transaction.update(userRef, {
+          userId: newId,
+          referralCode: newId,
+          role: newRole,
+          balance: newBalance,
+          status: newStatus
+        });
       });
-      setEditingBalance(null);
-    } catch (error) {
-      console.error("Update balance error:", error);
+
+      alert('User updated successfully!');
+      setEditingUser(null);
+    } catch (error: any) {
+      console.error("Update User error:", error);
+      alert(error.message || 'Failed to update user.');
     }
   };
 
@@ -439,53 +483,6 @@ export function AdminPanel() {
     }
   };
 
-  const handleToggleUserStatus = async (userId: string, currentStatus: string, userRole?: string) => {
-    if (userRole === 'ceo') {
-      alert("CEO status cannot be changed.");
-      return;
-    }
-    if (userRole === 'admin' && profile?.role !== 'ceo') {
-      alert("Only the CEO can change admin status.");
-      return;
-    }
-    if (!window.confirm(`Are you sure you want to ${currentStatus === 'active' ? 'deactivate' : 'activate'} this user?`)) return;
-    try {
-      await updateDoc(doc(db, 'users', userId), {
-        status: currentStatus === 'active' ? 'inactive' : 'active'
-      });
-      alert('User status updated!');
-    } catch (error) {
-      console.error("Toggle user status error:", error);
-    }
-  };
-
-  const handleToggleUserRole = async (userId: string, currentRole: string) => {
-    if (profile?.role !== 'ceo') {
-      alert("Only the CEO can change user roles.");
-      return;
-    }
-
-    if (currentRole === 'ceo') {
-      alert("CEO role cannot be changed.");
-      return;
-    }
-
-    const roles: ('user' | 'moderator' | 'admin')[] = ['user', 'moderator', 'admin'];
-    const currentIndex = roles.indexOf(currentRole as any);
-    const nextIndex = (currentIndex + 1) % roles.length;
-    const nextRole = roles[nextIndex];
-
-    if (!window.confirm(`Are you sure you want to change this user's role to ${nextRole}?`)) return;
-    try {
-      await updateDoc(doc(db, 'users', userId), {
-        role: nextRole
-      });
-      alert(`User role updated to ${nextRole}!`);
-    } catch (error) {
-      console.error("Toggle user role error:", error);
-    }
-  };
-
   const handleMigrateUserIds = async () => {
     if (profile?.role !== 'ceo') return;
     if (!window.confirm('This will migrate all User IDs to the new 8-digit format. Continue?')) return;
@@ -525,45 +522,6 @@ export function AdminPanel() {
     }
   };
 
-  const handleUpdateUserId = async (userId: string, currentId: string) => {
-    if (profile?.role !== 'ceo') return;
-    const newId = window.prompt(`Enter new 8-digit ID for this user (Current: ${currentId}):`, currentId);
-    if (!newId || newId === currentId) return;
-    
-    if (!/^\d{8}$/.test(newId)) {
-      alert("ID must be exactly 8 digits.");
-      return;
-    }
-
-    try {
-      await runTransaction(db, async (transaction) => {
-        const userRef = doc(db, 'users', userId);
-        const lookupRef = doc(db, 'referral_lookup', newId);
-        const oldLookupRef = doc(db, 'referral_lookup', currentId);
-
-        const userDoc = await transaction.get(userRef);
-        if (!userDoc.exists()) throw new Error("User not found");
-
-        transaction.update(userRef, { 
-          userId: newId,
-          referralCode: newId 
-        });
-
-        transaction.set(lookupRef, {
-          uid: userId,
-          userName: userDoc.data().userName,
-          userId: newId
-        });
-
-        transaction.delete(oldLookupRef);
-      });
-      alert('User ID updated successfully!');
-    } catch (error) {
-      console.error("Update User ID error:", error);
-      alert('Failed to update User ID. It might already be in use.');
-    }
-  };
-
   const handleDeleteUser = async (userId: string, userRole?: string) => {
     if (userRole === 'ceo') {
       alert("CEO cannot be deleted.");
@@ -587,12 +545,35 @@ export function AdminPanel() {
       await runTransaction(db, async (transaction) => {
         const reqRef = doc(db, 'activationRequests', request.id);
         const userRef = doc(db, 'users', request.userId);
+        
+        const userSnap = await transaction.get(userRef);
+        if (!userSnap.exists()) return;
+        
+        const userData = userSnap.data();
+        const referrerId = userData.referredBy;
 
         transaction.update(reqRef, { status: 'approved' });
         transaction.update(userRef, { status: 'active' });
+
+        // Increment referrer's referral count if they exist
+        if (referrerId) {
+          // Find referrer by their 8-digit userId
+          const referrerLookupRef = doc(db, 'referral_lookup', referrerId);
+          const lookupSnap = await transaction.get(referrerLookupRef);
+          
+          if (lookupSnap.exists()) {
+            const referrerUid = lookupSnap.data().uid;
+            const referrerRef = doc(db, 'users', referrerUid);
+            transaction.update(referrerRef, {
+              referrals: increment(1)
+            });
+          }
+        }
       });
+      alert('Activation approved!');
     } catch (error) {
       console.error("Approve activation error:", error);
+      alert('Failed to approve activation.');
     }
   };
 
@@ -800,7 +781,7 @@ export function AdminPanel() {
           theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
         )}>
           <div className="flex min-w-max gap-1">
-            {(['submissions', 'withdrawals', 'deposits', 'activations', 'socialsells', 'missions', 'users', 'giftcodes', 'levels', 'settings'] as const).map((tab) => (
+            {(['submissions', 'withdrawals', 'deposits', 'activations', 'socialsells', 'missions', 'users', 'giftcodes', 'levels', 'addnumber', 'settings'] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -820,9 +801,10 @@ export function AdminPanel() {
                 {tab === 'users' && <UsersIcon className="w-4 h-4" />}
                 {tab === 'giftcodes' && <Gift className="w-4 h-4" />}
                 {tab === 'levels' && <Award className="w-4 h-4" />}
+                {tab === 'addnumber' && <Smartphone className="w-4 h-4" />}
                 {tab === 'settings' && <SettingsIcon className="w-4 h-4" />}
-                {tab}
-                {searchQuery && tab !== 'settings' && tab !== 'giftcodes' && tab !== 'levels' ? (
+                {tab === 'addnumber' ? 'Add Number' : tab}
+                {searchQuery && tab !== 'settings' && tab !== 'addnumber' && tab !== 'giftcodes' && tab !== 'levels' ? (
                   <span className={cn(
                     "ml-1 px-1.5 py-0.5 rounded-full text-[8px] font-black",
                     activeTab === tab ? "bg-white text-pink-500" : "bg-pink-500 text-white"
@@ -1511,21 +1493,21 @@ export function AdminPanel() {
             </div>
           )}
 
-          {activeTab === 'settings' && (
-            <div className="space-y-10 max-w-4xl mx-auto">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                {/* Activation Settings */}
+          {activeTab === 'addnumber' && (
+            <div className="space-y-10">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Activation Payment Numbers */}
                 <div className={cn(
                   "rounded-[3rem] p-10 border space-y-10",
                   theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
                 )}>
                   <div className="space-y-2">
-                    <h3 className="text-2xl font-black tracking-tighter italic uppercase">Activation <span className="text-pink-500">Settings</span></h3>
-                    <p className="text-slate-500 font-black uppercase tracking-[0.2em] text-[10px]">Configure activation numbers and fees</p>
+                    <h3 className="text-2xl font-black tracking-tighter italic uppercase">Activation <span className="text-pink-500">Numbers</span></h3>
+                    <p className="text-slate-500 font-black uppercase tracking-[0.2em] text-[10px]">Numbers where agents send money for activation</p>
                   </div>
 
                   <form onSubmit={handleUpdatePaymentSettings} className="space-y-6">
-                    <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2">
                         <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">bKash Number</label>
                         <input 
@@ -1581,6 +1563,67 @@ export function AdminPanel() {
                   </form>
                 </div>
 
+                {/* Deposit Payment Numbers */}
+                <div className={cn(
+                  "rounded-[3rem] p-10 border space-y-10",
+                  theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
+                )}>
+                  <div className="space-y-2">
+                    <h3 className="text-2xl font-black tracking-tighter italic uppercase">Deposit <span className="text-pink-500">Numbers</span></h3>
+                    <p className="text-slate-500 font-black uppercase tracking-[0.2em] text-[10px]">Numbers where agents send money for deposits</p>
+                  </div>
+
+                  <form onSubmit={handleUpdateDepositSettings} className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">bKash (Deposit)</label>
+                      <input 
+                        value={depositSettings.bkash}
+                        onChange={e => setDepositSettings({...depositSettings, bkash: e.target.value})}
+                        placeholder="017XXXXXXXX"
+                        className={cn(
+                          "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500",
+                          theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
+                        )}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Nagad (Deposit)</label>
+                      <input 
+                        value={depositSettings.nagad}
+                        onChange={e => setDepositSettings({...depositSettings, nagad: e.target.value})}
+                        placeholder="017XXXXXXXX"
+                        className={cn(
+                          "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500",
+                          theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
+                        )}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Rocket (Deposit)</label>
+                      <input 
+                        value={depositSettings.rocket}
+                        onChange={e => setDepositSettings({...depositSettings, rocket: e.target.value})}
+                        placeholder="017XXXXXXXX"
+                        className={cn(
+                          "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500",
+                          theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
+                        )}
+                      />
+                    </div>
+                    <div className="md:col-span-3">
+                      <button type="submit" className="w-full bg-pink-500 text-white font-black py-4 rounded-2xl shadow-lg shadow-pink-500/20 uppercase tracking-widest text-xs flex items-center justify-center gap-2">
+                        <Save className="w-4 h-4" /> Save Deposit Numbers
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'settings' && (
+            <div className="space-y-10 max-w-4xl mx-auto">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                 {/* Withdrawal Limits */}
                 <div className={cn(
                   "rounded-[3rem] p-10 border space-y-10",
@@ -1623,61 +1666,6 @@ export function AdminPanel() {
                     </button>
                   </form>
                 </div>
-              </div>
-
-              {/* Deposit Payment Numbers */}
-              <div className={cn(
-                "rounded-[3rem] p-10 border space-y-10",
-                theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
-              )}>
-                <div className="space-y-2">
-                  <h3 className="text-2xl font-black tracking-tighter italic uppercase">Deposit <span className="text-pink-500">Numbers</span></h3>
-                  <p className="text-slate-500 font-black uppercase tracking-[0.2em] text-[10px]">Numbers where agents send money for deposits</p>
-                </div>
-
-                <form onSubmit={handleUpdateDepositSettings} className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">bKash (Deposit)</label>
-                    <input 
-                      value={depositSettings.bkash}
-                      onChange={e => setDepositSettings({...depositSettings, bkash: e.target.value})}
-                      placeholder="017XXXXXXXX"
-                      className={cn(
-                        "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500",
-                        theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
-                      )}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Nagad (Deposit)</label>
-                    <input 
-                      value={depositSettings.nagad}
-                      onChange={e => setDepositSettings({...depositSettings, nagad: e.target.value})}
-                      placeholder="017XXXXXXXX"
-                      className={cn(
-                        "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500",
-                        theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
-                      )}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Rocket (Deposit)</label>
-                    <input 
-                      value={depositSettings.rocket}
-                      onChange={e => setDepositSettings({...depositSettings, rocket: e.target.value})}
-                      placeholder="017XXXXXXXX"
-                      className={cn(
-                        "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500",
-                        theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
-                      )}
-                    />
-                  </div>
-                  <div className="md:col-span-3">
-                    <button type="submit" className="w-full bg-pink-500 text-white font-black py-4 rounded-2xl shadow-lg shadow-pink-500/20 uppercase tracking-widest text-xs flex items-center justify-center gap-2">
-                      <Save className="w-4 h-4" /> Save Deposit Numbers
-                    </button>
-                  </div>
-                </form>
               </div>
 
               {/* Dynamic Site Settings */}
@@ -2061,9 +2049,17 @@ export function AdminPanel() {
                               </div>
                               {profile?.role === 'ceo' && (
                                 <button 
-                                  onClick={() => handleUpdateUserId(u.uid, u.userId || '')}
+                                  onClick={() => {
+                                    setEditingUser(u);
+                                    setEditForm({
+                                      userId: u.userId || '',
+                                      role: u.role || 'user',
+                                      balance: (u.balance || 0).toString(),
+                                      status: u.status || 'active'
+                                    });
+                                  }}
                                   className="p-1 hover:bg-pink-500/10 rounded-md transition-colors"
-                                  title="Edit User ID"
+                                  title="Edit User Details"
                                 >
                                   <Edit3 className="w-3 h-3 text-pink-500" />
                                 </button>
@@ -2103,14 +2099,30 @@ export function AdminPanel() {
                     </div>
 
                     <div className="flex items-center gap-10">
-                      <div className="text-center group cursor-pointer" onClick={() => setEditingBalance({ userId: u.uid, amount: (u.balance || 0).toString() })}>
+                      <div className="text-center group cursor-pointer" onClick={() => {
+                        setEditingUser(u);
+                        setEditForm({
+                          userId: u.userId || '',
+                          role: u.role || 'user',
+                          balance: (u.balance || 0).toString(),
+                          status: u.status || 'active'
+                        });
+                      }}>
                         <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center gap-1">Balance <Edit3 className="w-2 h-2 opacity-0 group-hover:opacity-100 transition-opacity" /></div>
                         <div className="text-xl font-black text-pink-500 tracking-tighter italic">${(u.balance || 0).toFixed(2)}</div>
                       </div>
                       <div className="text-center">
                         <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Role</div>
                         <button 
-                          onClick={() => handleToggleUserRole(u.uid, u.role)}
+                          onClick={() => {
+                            setEditingUser(u);
+                            setEditForm({
+                              userId: u.userId || '',
+                              role: u.role || 'user',
+                              balance: (u.balance || 0).toString(),
+                              status: u.status || 'active'
+                            });
+                          }}
                           className={cn(
                             "text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full transition-all hover:scale-105",
                             u.role === 'ceo' ? "bg-pink-500/10 text-pink-500 border border-pink-500/20" :
@@ -2133,7 +2145,15 @@ export function AdminPanel() {
                       </div>
                       <div className="flex items-center gap-2">
                         <button 
-                          onClick={() => handleToggleUserStatus(u.uid, u.status, u.role)}
+                          onClick={() => {
+                            setEditingUser(u);
+                            setEditForm({
+                              userId: u.userId || '',
+                              role: u.role || 'user',
+                              balance: (u.balance || 0).toString(),
+                              status: u.status || 'active'
+                            });
+                          }}
                           className={cn(
                             "p-4 rounded-2xl transition-all active:scale-95",
                             u.status === 'active' ? "bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white" : "bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white"
@@ -2160,33 +2180,86 @@ export function AdminPanel() {
       </div>
 
       {/* Edit Balance Modal */}
-      {editingBalance && (
+      {editingUser && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
           <div className={cn(
-            "w-full max-w-sm rounded-[2.5rem] p-8 space-y-6 border animate-in fade-in zoom-in duration-300 my-auto",
+            "w-full max-w-md rounded-[2.5rem] p-8 space-y-6 border animate-in fade-in zoom-in duration-300 my-auto",
             "max-h-[90vh] overflow-y-auto custom-scrollbar",
             theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
           )}>
             <div className="flex justify-between items-center">
-              <h3 className="text-xl font-black italic uppercase tracking-tight">Edit <span className="text-pink-500">Balance</span></h3>
-              <button onClick={() => setEditingBalance(null)}><X className="w-6 h-6 text-slate-400" /></button>
-            </div>
-            <form onSubmit={handleUpdateBalance} className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-2">New Balance ($)</label>
-                <input 
-                  type="number"
-                  step="0.01"
-                  value={editingBalance.amount}
-                  onChange={e => setEditingBalance({...editingBalance, amount: e.target.value})}
-                  className={cn(
-                    "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500",
-                    theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
-                  )}
-                  autoFocus
-                />
+              <div className="space-y-1">
+                <h3 className="text-xl font-black italic uppercase tracking-tight">Edit <span className="text-pink-500">User</span></h3>
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{editingUser.userName}</p>
               </div>
-              <button type="submit" className="w-full bg-pink-500 text-white font-black py-4 rounded-2xl shadow-lg shadow-pink-500/20 uppercase tracking-widest text-xs">Update Balance</button>
+              <button onClick={() => setEditingUser(null)}><X className="w-6 h-6 text-slate-400" /></button>
+            </div>
+            <form onSubmit={handleUpdateUser} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-2">User ID (8 Digits)</label>
+                  <input 
+                    type="text"
+                    value={editForm.userId}
+                    onChange={e => setEditForm({...editForm, userId: e.target.value})}
+                    className={cn(
+                      "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500",
+                      theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
+                    )}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-2">Balance ($)</label>
+                  <input 
+                    type="number"
+                    step="0.01"
+                    value={editForm.balance}
+                    onChange={e => setEditForm({...editForm, balance: e.target.value})}
+                    className={cn(
+                      "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500",
+                      theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
+                    )}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-2">Role</label>
+                  <select 
+                    value={editForm.role}
+                    onChange={e => setEditForm({...editForm, role: e.target.value as any})}
+                    className={cn(
+                      "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500 appearance-none",
+                      theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
+                    )}
+                  >
+                    <option value="user">User</option>
+                    <option value="moderator">Moderator</option>
+                    <option value="admin">Admin</option>
+                    <option value="ceo">CEO</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-2">Status</label>
+                  <select 
+                    value={editForm.status}
+                    onChange={e => setEditForm({...editForm, status: e.target.value as any})}
+                    className={cn(
+                      "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500 appearance-none",
+                      theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
+                    )}
+                  >
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                    <option value="pending">Pending</option>
+                  </select>
+                </div>
+              </div>
+
+              <button type="submit" className="w-full bg-pink-500 text-white font-black py-4 rounded-2xl shadow-lg shadow-pink-500/20 uppercase tracking-widest text-xs flex items-center justify-center gap-2">
+                <Save className="w-4 h-4" /> Save Changes
+              </button>
             </form>
           </div>
         </div>

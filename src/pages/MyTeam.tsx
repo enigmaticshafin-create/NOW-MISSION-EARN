@@ -58,11 +58,11 @@ export default function MyTeam() {
   const getCurrentLevel = () => {
     if (!levelConfigs.length) return { level: 0, name: 'Beginner' };
     
-    const count = referrals.length;
+    const activeCount = referrals.filter(r => r.status === 'active').length;
     let currentLevel = levelConfigs[0];
     
     for (const config of levelConfigs) {
-      if (count >= config.minReferrals) {
+      if (activeCount >= config.minReferrals) {
         currentLevel = config;
       } else {
         break;
@@ -78,7 +78,7 @@ export default function MyTeam() {
   );
 
   const stats = [
-    { name: 'Total Referrals', value: referrals.length, icon: Users, color: 'bg-blue-500' },
+    { name: 'Total Referrals', value: referrals.filter(r => r.status === 'active').length, icon: Users, color: 'bg-blue-500' },
     { name: 'Active Members', value: referrals.filter(r => r.status === 'active').length, icon: ShieldCheck, color: 'bg-emerald-500' },
     { name: 'Team Sales', value: `BDT ${referrals.reduce((acc, curr) => acc + (curr.totalEarned || 0), 0).toFixed(2)}`, icon: TrendingUp, color: 'bg-pink-500' },
   ];
@@ -180,6 +180,14 @@ export default function MyTeam() {
                   <div className="flex flex-wrap items-center gap-2">
                     <h4 className="font-black text-lg tracking-tight">{member.firstName} {member.lastName}</h4>
                     <span className="text-[10px] font-black bg-slate-500/10 text-slate-500 px-2 py-0.5 rounded-full uppercase tracking-widest">ID: {member.userId}</span>
+                    <span className={cn(
+                      "text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest",
+                      member.status === 'active' 
+                        ? "bg-emerald-500/10 text-emerald-500" 
+                        : "bg-rose-500/10 text-rose-500"
+                    )}>
+                      {member.status || 'inactive'}
+                    </span>
                   </div>
                   <div className="flex flex-col gap-1 mt-1">
                     <div className="flex items-center gap-2 text-slate-500 text-xs font-bold uppercase tracking-widest">
@@ -205,7 +213,7 @@ export default function MyTeam() {
                   member.status === 'active' ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500"
                 )}>
                   {member.status === 'active' ? <ShieldCheck className="w-3 h-3" /> : <ShieldAlert className="w-3 h-3" />}
-                  {member.status === 'active' ? 'Active' : 'Inactive'}
+                  {member.status === 'active' ? 'Active' : 'Non-active'}
                 </div>
                 <ChevronRight className="w-5 h-5 text-slate-500" />
               </div>

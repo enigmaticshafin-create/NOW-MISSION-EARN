@@ -3,7 +3,7 @@ import { useAuth } from '../hooks/useAuth';
 import { db, auth } from '../firebase';
 import { doc, updateDoc, collection, query, where, onSnapshot, orderBy, addDoc, runTransaction, increment } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { User, Mail, Phone, Hash, Link as LinkIcon, Copy, CheckCircle2, Wallet, ArrowUpCircle, History, Settings, X, ArrowUpRight, AlertCircle, Camera, Loader2 } from 'lucide-react';
+import { User, Mail, Phone, Hash, Link as LinkIcon, Copy, CheckCircle2, Wallet, ArrowUpCircle, History, Settings, X, ArrowUpRight, AlertCircle, Camera, Loader2, Users } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useTheme } from '../context/ThemeContext';
 import { storage } from '../firebase';
@@ -36,7 +36,7 @@ export const Profile: React.FC = () => {
   useEffect(() => {
     if (!user || !profile?.userId) return;
 
-    const rQ = query(collection(db, 'users'), where('referBy', '==', profile.userId));
+    const rQ = query(collection(db, 'users'), where('referBy', '==', profile.userId), where('status', '==', 'active'));
     const unsubReferrals = onSnapshot(rQ, (snap) => {
       setReferralCount(snap.size);
     }, (error) => {

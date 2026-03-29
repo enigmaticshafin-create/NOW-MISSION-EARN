@@ -28,7 +28,7 @@ export default function Leaderboard() {
         // Fetch top referrers
         const referrersQuery = query(
           collection(db, 'users'), 
-          orderBy('referralCount', 'desc'), 
+          orderBy('referrals', 'desc'), 
           limit(20)
         );
         const referrersSnap = await getDocs(referrersQuery);
@@ -128,12 +128,13 @@ export default function Leaderboard() {
       <div className="grid grid-cols-3 items-end gap-4 pt-12">
         {/* 2nd Place */}
         {currentData[1] && (
-          <div className="space-y-4 text-center">
+          <div className="space-y-4 text-center group">
             <div className="relative inline-block">
-              <div className="w-20 h-20 rounded-3xl bg-slate-300 flex items-center justify-center rotate-6 shadow-xl">
+              <div className="w-20 h-20 rounded-3xl bg-slate-300 flex items-center justify-center rotate-6 shadow-xl group-hover:scale-110 transition-transform duration-500">
                 <Medal className="w-10 h-10 text-white -rotate-6" />
+                <div className="absolute inset-0 bg-white/20 rounded-3xl blur-xl group-hover:blur-2xl transition-all" />
               </div>
-              <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-white text-slate-900 rounded-full flex items-center justify-center font-black text-xs border-2 border-slate-300">2</div>
+              <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-white text-slate-900 rounded-full flex items-center justify-center font-black text-xs border-2 border-slate-300 shadow-lg">2</div>
             </div>
             <div className="space-y-1">
               <p className="font-black text-sm truncate px-2">{currentData[1].userName}</p>
@@ -146,15 +147,16 @@ export default function Leaderboard() {
 
         {/* 1st Place */}
         {currentData[0] && (
-          <div className="space-y-4 text-center -mt-8">
+          <div className="space-y-4 text-center -mt-8 group">
             <div className="relative inline-block">
-              <div className="w-28 h-28 rounded-[2.5rem] bg-yellow-400 flex items-center justify-center -rotate-6 shadow-2xl shadow-yellow-400/30">
-                <Crown className="w-14 h-14 text-white rotate-6" />
+              <div className="w-28 h-28 rounded-[2.5rem] bg-gradient-to-br from-yellow-400 to-amber-500 flex items-center justify-center -rotate-6 shadow-2xl shadow-yellow-400/40 group-hover:scale-110 transition-transform duration-500">
+                <Crown className="w-14 h-14 text-white rotate-6 drop-shadow-lg" />
+                <div className="absolute inset-0 bg-yellow-400/30 rounded-[2.5rem] blur-2xl group-hover:blur-3xl transition-all animate-pulse" />
               </div>
-              <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-white text-slate-900 rounded-full flex items-center justify-center font-black text-sm border-4 border-yellow-400">1</div>
+              <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-white text-slate-900 rounded-full flex items-center justify-center font-black text-sm border-4 border-yellow-400 shadow-xl">1</div>
             </div>
             <div className="space-y-1">
-              <p className="font-black text-lg truncate px-2">{currentData[0].userName}</p>
+              <p className="font-black text-lg truncate px-2 bg-gradient-to-r from-yellow-500 to-amber-600 bg-clip-text text-transparent">{currentData[0].userName}</p>
               <p className="text-sm font-black text-pink-500">
                 {activeTab === 'referrers' ? `${currentData[0].referrals} Referrals` : `BDT ${currentData[0].totalWithdraw?.toFixed(0)}`}
               </p>
@@ -164,12 +166,13 @@ export default function Leaderboard() {
 
         {/* 3rd Place */}
         {currentData[2] && (
-          <div className="space-y-4 text-center">
+          <div className="space-y-4 text-center group">
             <div className="relative inline-block">
-              <div className="w-20 h-20 rounded-3xl bg-amber-600 flex items-center justify-center -rotate-12 shadow-xl">
+              <div className="w-20 h-20 rounded-3xl bg-amber-600 flex items-center justify-center -rotate-12 shadow-xl group-hover:scale-110 transition-transform duration-500">
                 <Medal className="w-10 h-10 text-white rotate-12" />
+                <div className="absolute inset-0 bg-amber-600/20 rounded-3xl blur-xl group-hover:blur-2xl transition-all" />
               </div>
-              <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-white text-slate-900 rounded-full flex items-center justify-center font-black text-xs border-2 border-amber-600">3</div>
+              <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-white text-slate-900 rounded-full flex items-center justify-center font-black text-xs border-2 border-amber-600 shadow-lg">3</div>
             </div>
             <div className="space-y-1">
               <p className="font-black text-sm truncate px-2">{currentData[2].userName}</p>
