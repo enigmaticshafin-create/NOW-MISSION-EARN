@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTheme } from '../context/ThemeContext';
-import { Mail, Facebook, Send, Instagram, Upload, CheckCircle2, AlertCircle, Loader2, ChevronRight, Copy, RefreshCw, ShieldCheck } from 'lucide-react';
+import { Mail, Facebook, Send, Instagram, Upload, CheckCircle2, AlertCircle, Loader2, ChevronRight, Copy, RefreshCw, ShieldCheck, MessageCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../hooks/useAuth';
 import { db, storage } from '../firebase';
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, getDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { SocialSellSettings } from '../types';
 
 interface SellPageProps {
   type: 'Gmail' | 'Facebook' | 'Telegram' | 'Instagram';
@@ -16,6 +17,7 @@ export default function SellPage({ type }: SellPageProps) {
   const { user, profile } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [settings, setSettings] = useState<SocialSellSettings | null>(null);
   
   // Specific fields based on type
   const [form, setForm] = useState({
@@ -30,6 +32,20 @@ export default function SellPage({ type }: SellPageProps) {
   });
   
   const [screenshot, setScreenshot] = useState<File | null>(null);
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const snap = await getDoc(doc(db, 'settings', 'socialSell'));
+        if (snap.exists()) {
+          setSettings(snap.data() as SocialSellSettings);
+        }
+      } catch (error) {
+        console.error('Error fetching social sell settings:', error);
+      }
+    };
+    fetchSettings();
+  }, []);
 
   const icons = {
     Gmail: Mail,
@@ -46,6 +62,13 @@ export default function SellPage({ type }: SellPageProps) {
   };
 
   const Icon = icons[type];
+
+  const currentPrice = settings ? (
+    type === 'Gmail' ? settings.gmailPrice :
+    type === 'Facebook' ? settings.facebookPrice :
+    type === 'Instagram' ? settings.instagramPrice :
+    settings.telegramPrice
+  ) : 0;
 
   if (profile?.status !== 'active') {
     return (
@@ -104,7 +127,7 @@ export default function SellPage({ type }: SellPageProps) {
         userName: profile.userName,
         userSequentialId: profile.userId,
         type,
-        price: parseFloat(form.price),
+        price: currentPrice,
         description: form.description,
         screenshot: screenshotUrl,
         status: 'pending',
@@ -186,9 +209,37 @@ export default function SellPage({ type }: SellPageProps) {
         </div>
         <div>
           <h2 className="text-3xl font-black tracking-tight italic uppercase">{type} Sell</h2>
-          <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Submit your account for sale</p>
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Price: <span className="text-pink-500">{currentPrice} BDT</span></p>
         </div>
       </div>
+
+      {settings?.approvalMessage && (
+        <div className={cn(
+          "p-6 rounded-3xl border flex items-start gap-4",
+          theme === 'dark' ? "bg-blue-500/5 border-blue-500/20" : "bg-blue-50 border-blue-100"
+        )}>
+          <AlertCircle className="w-6 h-6 text-blue-500 shrink-0 mt-1" />
+          <div className="space-y-1">
+            <p className={cn(
+              "text-sm font-bold leading-relaxed",
+              theme === 'dark' ? "text-blue-200" : "text-blue-900"
+            )}>
+              {settings.approvalMessage}
+            </p>
+            {settings.telegramSupport && (
+              <a 
+                href={settings.telegramSupport}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-blue-500 hover:underline mt-2"
+              >
+                <MessageCircle className="w-3 h-3" />
+                Contact Support on Telegram
+              </a>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className={cn(
         "rounded-[2.5rem] p-8 border space-y-6",
@@ -326,22 +377,7 @@ export default function SellPage({ type }: SellPageProps) {
             </>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Asking Price (BDT)</label>
-              <input 
-                type="number"
-                value={form.price}
-                onChange={(e) => setForm({ ...form, price: e.target.value })}
-                placeholder="500"
-                className={cn(
-                  "w-full px-6 py-4 rounded-2xl border focus:ring-2 focus:ring-pink-500 transition-all text-sm font-bold",
-                  theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
-                )}
-                required
-              />
-            </div>
-
+          <div className="grid grid-cols-1 gap-6">
             <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Account Screenshot</label>
               <label className={cn(

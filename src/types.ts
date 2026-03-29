@@ -28,6 +28,12 @@ export interface UserProfile {
   referralCode: string;
   referredBy?: string;
   createdAt: string;
+  // Specific Earnings
+  gmailBalance?: number;
+  telegramBalance?: number;
+  facebookBalance?: number;
+  instagramBalance?: number;
+  salaryBalance?: number;
 }
 
 export interface Mission {
@@ -141,6 +147,15 @@ export interface SocialSellSubmission {
   screenshot?: string;
   // Gmail fields
   gmail?: string;
+}
+
+export interface SocialSellSettings {
+  gmailPrice: number;
+  facebookPrice: number;
+  instagramPrice: number;
+  telegramPrice: number;
+  telegramSupport: string;
+  approvalMessage: string;
 }
 
 export interface DynamicSettings {

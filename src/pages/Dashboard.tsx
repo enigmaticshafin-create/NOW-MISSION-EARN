@@ -35,10 +35,61 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
 import { Mission, MissionSubmission, PaymentSettings, DynamicSettings } from '../types';
 
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId: string | undefined;
+    email: string | null | undefined;
+    emailVerified: boolean | undefined;
+    isAnonymous: boolean | undefined;
+    tenantId: string | null | undefined;
+    providerInfo: {
+      providerId: string;
+      displayName: string | null;
+      email: string | null;
+      photoUrl: string | null;
+    }[];
+  }
+}
+
 export function Dashboard() {
   const { user, profile, loading: authLoading } = useAuth();
   const { theme } = useTheme();
   const navigate = useNavigate();
+
+  const handleFirestoreError = (error: unknown, operationType: OperationType, path: string | null) => {
+    const errInfo: FirestoreErrorInfo = {
+      error: error instanceof Error ? error.message : String(error),
+      authInfo: {
+        userId: user?.uid,
+        email: user?.email,
+        emailVerified: user?.emailVerified,
+        isAnonymous: user?.isAnonymous,
+        tenantId: user?.tenantId,
+        providerInfo: user?.providerData.map(provider => ({
+          providerId: provider.providerId,
+          displayName: provider.displayName,
+          email: provider.email,
+          photoUrl: provider.photoURL
+        })) || []
+      },
+      operationType,
+      path
+    };
+    console.error('Firestore Error: ', JSON.stringify(errInfo));
+    throw new Error(JSON.stringify(errInfo));
+  };
   const [missions, setMissions] = useState<Mission[]>([]);
   const [submissions, setSubmissions] = useState<MissionSubmission[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,6 +103,8 @@ export function Dashboard() {
   const [dynamicSettings, setDynamicSettings] = useState<DynamicSettings | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
+  const [pendingSells, setPendingSells] = useState<any[]>([]);
+
   useEffect(() => {
     // Listen to dynamic settings
     const unsubscribe = onSnapshot(doc(db, 'dynamicSettings', 'main'), (doc) => {
@@ -64,6 +117,32 @@ export function Dashboard() {
 
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    
+    // Listen to user's pending social sells for the 24h alert
+    const q = query(
+      collection(db, 'socialSells'), 
+      where('userId', '==', user.uid),
+      where('status', '==', 'pending')
+    );
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const sells = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setPendingSells(sells);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  const hasOldPendingSells = pendingSells.some(sell => {
+    if (!sell.submittedAt) return false;
+    const submittedDate = new Date(sell.submittedAt);
+    const now = new Date();
+    const diffInHours = (now.getTime() - submittedDate.getTime()) / (1000 * 60 * 60);
+    return diffInHours >= 24;
+  });
 
   useEffect(() => {
     const fetchData = async () => {
@@ -165,52 +244,94 @@ export function Dashboard() {
     e.preventDefault();
     if (!user || !profile) return;
 
+    if (!paymentSettings) {
+      setMessage({ type: 'error', text: 'Payment settings not loaded. Please wait a moment and try again.' });
+      return;
+    }
+
+    if (!senderNumber || !transactionId) {
+      setMessage({ type: 'error', text: 'Please fill in all required fields.' });
+      return;
+    }
+
     setIsActivating(true);
     try {
       let screenshotUrl = '';
       if (screenshot) {
-        const storageRef = ref(storage, `activations/${user.uid}/${Date.now()}_${screenshot.name}`);
-        await uploadBytes(storageRef, screenshot);
-        screenshotUrl = await getDownloadURL(storageRef);
+        try {
+          const storageRef = ref(storage, `activations/${user.uid}/${Date.now()}_${screenshot.name}`);
+          await uploadBytes(storageRef, screenshot);
+          screenshotUrl = await getDownloadURL(storageRef);
+        } catch (storageErr) {
+          console.error('Error uploading screenshot:', storageErr);
+          throw new Error('Failed to upload screenshot. Please check your internet connection and try again.');
+        }
       }
 
-      await addDoc(collection(db, 'activationRequests'), {
+      const activationData = {
         userId: user.uid,
-        userName: profile.userName,
-        userSequentialId: profile.userId,
-        userEmail: profile.email,
+        userName: profile.userName || 'Unknown',
+        userSequentialId: profile.userId || 'Unknown',
+        userEmail: profile.email || 'Unknown',
         method: activationMethod === 'bkash' ? 'bKash' : activationMethod === 'nagad' ? 'Nagad' : 'Rocket',
         senderNumber,
-        paymentNumber: activationMethod === 'bkash' ? paymentSettings?.bKash :
-                       activationMethod === 'nagad' ? paymentSettings?.Nagad :
-                       paymentSettings?.Rocket,
-        amount: paymentSettings?.activationFee || 20,
+        paymentNumber: activationMethod === 'bkash' ? paymentSettings.bKash :
+                       activationMethod === 'nagad' ? paymentSettings.Nagad :
+                       paymentSettings.Rocket,
+        amount: paymentSettings.activationFee || 20,
         transactionId,
         screenshot: screenshotUrl,
         status: 'pending',
         submittedAt: new Date().toISOString()
-      });
+      };
+
+      try {
+        await addDoc(collection(db, 'activationRequests'), activationData);
+      } catch (error) {
+        handleFirestoreError(error, OperationType.CREATE, 'activationRequests');
+      }
 
       // Update user status to pending
-      await updateDoc(doc(db, 'users', user.uid), {
-        status: 'pending'
-      });
+      try {
+        await updateDoc(doc(db, 'users', user.uid), {
+          status: 'pending'
+        });
+      } catch (error) {
+        handleFirestoreError(error, OperationType.UPDATE, `users/${user.uid}`);
+      }
 
       setMessage({ type: 'success', text: 'Activation request submitted successfully!' });
-      setShowActivationModal(false);
       setTransactionId('');
       setSenderNumber('');
       setScreenshot(null);
       
+      // Close modal after a short delay
+      setTimeout(() => {
+        setShowActivationModal(false);
+      }, 1000);
+      
       // If user is admin/ceo, they might want to go to admin panel to approve
       if (profile.role === 'admin' || profile.role === 'ceo') {
         setTimeout(() => {
-          navigate('/admin');
-        }, 2000);
+          navigate('/admin?tab=activations');
+        }, 3000);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error submitting activation:', error);
-      alert('Failed to submit activation request. Please try again.');
+      let errorMsg = 'Failed to submit activation request. Please try again.';
+      
+      try {
+        const parsedError = JSON.parse(error.message);
+        if (parsedError.error.includes('permission-denied')) {
+          errorMsg = 'Permission denied. Please ensure your payment details are correct and try again.';
+        } else {
+          errorMsg = parsedError.error;
+        }
+      } catch (e) {
+        errorMsg = error.message || errorMsg;
+      }
+      
+      setMessage({ type: 'error', text: errorMsg });
     } finally {
       setIsActivating(false);
     }
@@ -263,7 +384,43 @@ export function Dashboard() {
             </p>
           </div>
         </div>
+        
+        {(profile?.role === 'admin' || profile?.role === 'ceo') && (
+          <button 
+            onClick={() => navigate('/admin?tab=quicksetup')}
+            className="flex items-center gap-3 bg-blue-600 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-blue-600/20 hover:scale-[1.02] transition-all"
+          >
+            <Zap className="w-5 h-5" />
+            Price
+          </button>
+        )}
       </div>
+
+      {/* 24h Pending Alert */}
+      {hasOldPendingSells && (
+        <div className={cn(
+          "rounded-[2rem] p-6 border flex flex-col sm:flex-row items-center justify-between gap-4 animate-pulse",
+          theme === 'dark' ? "bg-rose-500/10 border-rose-500/20" : "bg-rose-50 border-rose-200"
+        )}>
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-rose-500 rounded-2xl flex items-center justify-center">
+              <Clock className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <p className="font-black uppercase tracking-tight text-rose-500">Pending Request Alert</p>
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">If something is not approved within 24 hours, contact us.</p>
+            </div>
+          </div>
+          <a 
+            href={dynamicSettings?.telegramSupport || '#'}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-rose-500 text-white px-8 py-3 rounded-xl font-black uppercase tracking-widest text-xs shadow-lg shadow-rose-500/20 hover:scale-[1.02] transition-all"
+          >
+            Contact Support
+          </a>
+        </div>
+      )}
 
       {/* Social Sell Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
@@ -448,7 +605,7 @@ export function Dashboard() {
       </footer>
 
       <div className="text-center text-xs font-bold text-slate-500 pb-8">
-        © {new Date().getFullYear()} All Rights Reserved — {dynamicSettings?.footerText || "Digital Nova"}
+        © {new Date().getFullYear()} All Rights Reserved — {dynamicSettings?.footerText || "Digital Mobile"}
       </div>
 
       {/* Activation Modal */}
