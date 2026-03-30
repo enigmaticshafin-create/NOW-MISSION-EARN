@@ -1,10 +1,61 @@
-import React, { useState, useEffect } from 'react';
-import { collection, query, getDocs, where, addDoc, doc, getDoc, writeBatch } from 'firebase/firestore';
+import React, { useState, useEffect, useRef } from 'react';
+import { collection, query, getDocs, where, addDoc, doc, getDoc, writeBatch, onSnapshot, orderBy } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, auth, storage } from '../firebase';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
 import { Mission, MissionSubmission } from '../types';
+
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId: string | undefined;
+    email: string | null | undefined;
+    emailVerified: boolean | undefined;
+    isAnonymous: boolean | undefined;
+    tenantId: string | null | undefined;
+    providerInfo: {
+      providerId: string;
+      displayName: string | null;
+      email: string | null;
+      photoUrl: string | null;
+    }[];
+  }
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData.map(provider => ({
+        providerId: provider.providerId,
+        displayName: provider.displayName,
+        email: provider.email,
+        photoUrl: provider.photoURL
+      })) || []
+    },
+    operationType,
+    path
+  }
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
 import { 
   Briefcase, 
   CheckCircle2, 
@@ -31,29 +82,49 @@ export default function MyJobs() {
   const [proof, setProof] = useState('');
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
+
+  // Sync ref with state
+  useEffect(() => {
+    isSubmittingRef.current = isSubmitting;
+  }, [isSubmitting]);
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchMissions = async () => {
       try {
         const missionsQuery = query(collection(db, 'missions'), where('status', '==', 'active'));
         const missionsSnap = await getDocs(missionsQuery);
         const missionsData = missionsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Mission));
         setMissions(missionsData);
-
-        if (user) {
-          const submissionsQuery = query(collection(db, 'missionSubmissions'), where('userId', '==', user.uid));
-          const submissionsSnap = await getDocs(submissionsQuery);
-          const submissionsData = submissionsSnap.docs.map(doc => doc.data() as MissionSubmission);
-          setSubmissions(submissionsData);
-        }
       } catch (error) {
-        console.error('Error fetching jobs:', error);
+        console.error('Error fetching missions:', error);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchData();
+    fetchMissions();
+
+    let unsubSubmissions: (() => void) | undefined;
+
+    if (user) {
+      const submissionsQuery = query(
+        collection(db, 'missionSubmissions'), 
+        where('userId', '==', user.uid),
+        orderBy('submittedAt', 'desc')
+      );
+      
+      unsubSubmissions = onSnapshot(submissionsQuery, (snap) => {
+        const submissionsData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as MissionSubmission));
+        setSubmissions(submissionsData);
+      }, (error) => {
+        console.error('Error listening to submissions:', error);
+      });
+    }
+
+    return () => {
+      if (unsubSubmissions) unsubSubmissions();
+    };
   }, [user]);
 
   const getSubmissionStatus = (missionId: string) => {
@@ -68,17 +139,30 @@ export default function MyJobs() {
 
   const handleSubmitMission = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !selectedMission) return;
+    if (!user || !selectedMission || isSubmitting) return;
 
     setIsSubmitting(true);
+    console.log('Starting mission submission for:', selectedMission.id);
+
+    const timeoutId = setTimeout(() => {
+      if (isSubmittingRef.current) {
+        setIsSubmitting(false);
+        console.error('Mission submission timed out');
+        alert('Submission timed out. Please check your connection and try again.');
+      }
+    }, 15000);
+
     try {
       let proofUrl = '';
       if (proofFile) {
+        console.log('Uploading proof file...');
         const storageRef = ref(storage, `submissions/${user.uid}/${Date.now()}_${proofFile.name}`);
         await uploadBytes(storageRef, proofFile);
         proofUrl = await getDownloadURL(storageRef);
+        console.log('File uploaded, URL:', proofUrl);
       }
 
+      console.log('Adding document to Firestore...');
       await addDoc(collection(db, 'missionSubmissions'), {
         userId: user.uid,
         userName: profile?.userName || 'Anonymous',
@@ -90,25 +174,17 @@ export default function MyJobs() {
         status: 'pending',
         submittedAt: new Date().toISOString(),
       });
+      console.log('Document added successfully');
 
-      setSubmissions(prev => [...prev, {
-        userId: user.uid,
-        userName: profile?.userName || 'Anonymous',
-        userSequentialId: profile?.userId || 'N/A',
-        missionId: selectedMission.id,
-        missionTitle: selectedMission.title,
-        reward: selectedMission.reward,
-        proof: proofUrl || proof.trim(),
-        status: 'pending',
-        submittedAt: new Date().toISOString(),
-      } as MissionSubmission]);
-
+      clearTimeout(timeoutId);
       setSelectedMission(null);
       setProof('');
       setProofFile(null);
       alert('Mission submitted successfully!');
     } catch (error) {
+      clearTimeout(timeoutId);
       console.error('Error submitting mission:', error);
+      handleFirestoreError(error, OperationType.CREATE, 'missionSubmissions');
       alert('Failed to submit mission. Please try again.');
     } finally {
       setIsSubmitting(false);

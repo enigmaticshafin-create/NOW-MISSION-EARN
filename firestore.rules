@@ -96,8 +96,12 @@ service cloud.firestore {
     function isValidSubmission(data) {
       return data.missionId is string && data.missionId.size() > 0 &&
              data.userId is string && data.userId == request.auth.uid &&
+             (!('userName' in data) || (data.userName is string && data.userName.size() < 100)) &&
+             (!('userSequentialId' in data) || (data.userSequentialId is string && data.userSequentialId.size() < 50)) &&
+             (!('missionTitle' in data) || (data.missionTitle is string && data.missionTitle.size() < 200)) &&
+             (!('reward' in data) || (data.reward is number && data.reward >= 0)) &&
              data.status in ['pending', 'approved', 'rejected'] &&
-             data.proof is string && data.proof.size() > 0 && data.proof.size() < 1000 &&
+             data.proof is string && data.proof.size() > 0 && data.proof.size() < 2000 &&
              isValidDateString(data.submittedAt);
     }
 

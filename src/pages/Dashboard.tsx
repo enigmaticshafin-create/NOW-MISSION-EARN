@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
 import { 
@@ -31,10 +31,10 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, getDocs, where, addDoc, doc, getDoc, updateDoc, setDoc, onSnapshot, orderBy, writeBatch, runTransaction } from 'firebase/firestore';
+import { collection, query, getDocs, where, addDoc, doc, getDoc, updateDoc, setDoc, onSnapshot, orderBy, writeBatch, runTransaction, limit } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
-import { Mission, MissionSubmission, PaymentSettings, DynamicSettings } from '../types';
+import { Mission, MissionSubmission, PaymentSettings, DynamicSettings, ActivationRequest } from '../types';
 
 enum OperationType {
   CREATE = 'create',
@@ -100,6 +100,12 @@ export function Dashboard() {
   const [senderNumber, setSenderNumber] = useState('');
   const [screenshot, setScreenshot] = useState<File | null>(null);
   const [isActivating, setIsActivating] = useState(false);
+  const isActivatingRef = useRef(false);
+
+  // Sync ref with state
+  useEffect(() => {
+    isActivatingRef.current = isActivating;
+  }, [isActivating]);
   const [paymentSettings, setPaymentSettings] = useState<PaymentSettings | null>(null);
   const [dynamicSettings, setDynamicSettings] = useState<DynamicSettings | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -107,6 +113,29 @@ export function Dashboard() {
   const [pendingSells, setPendingSells] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [latestActivationRequest, setLatestActivationRequest] = useState<ActivationRequest | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    
+    // Listen to user's latest activation request
+    const q = query(
+      collection(db, 'activationRequests'),
+      where('userId', '==', user.uid),
+      orderBy('submittedAt', 'desc'),
+      limit(1)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      if (!snapshot.empty) {
+        setLatestActivationRequest({ id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as ActivationRequest);
+      } else {
+        setLatestActivationRequest(null);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [user]);
 
   useEffect(() => {
     // Listen to dynamic settings
@@ -300,7 +329,7 @@ export function Dashboard() {
 
     // Safety timeout to reset the button if it hangs for more than 30 seconds
     const safetyTimeout = setTimeout(() => {
-      if (isActivating) {
+      if (isActivatingRef.current) {
         console.warn('Activation submission timed out.');
         setIsActivating(false);
         setMessage({ type: 'error', text: 'সাবমিশন টাইমআউট হয়েছে। দয়া করে ইন্টারনেট চেক করে আবার চেষ্টা করুন।' });
@@ -344,15 +373,31 @@ export function Dashboard() {
         await runTransaction(db, async (transaction) => {
           const activationRef = doc(collection(db, 'activationRequests'));
           const userRef = doc(db, 'users', user.uid);
+          const usedTxRef = doc(db, 'usedTransactionIds', transactionId);
           
+          // Check if transaction ID is already used in the transaction
+          const usedTxSnap = await transaction.get(usedTxRef);
+          if (usedTxSnap.exists()) {
+            throw new Error('এই ট্রানজেকশন আইডিটি ইতিমধ্যে ব্যবহার করা হয়েছে।');
+          }
+
           transaction.set(activationRef, activationData);
           transaction.update(userRef, {
             status: 'pending'
           });
+          transaction.set(usedTxRef, {
+            usedAt: new Date().toISOString(),
+            userId: user.uid,
+            userName: profile.userName,
+            type: 'activation'
+          });
         });
         console.log('Activation request saved and user status updated.');
-      } catch (error) {
+      } catch (error: any) {
         console.error('Firestore transaction failed:', error);
+        if (error.message === 'এই ট্রানজেকশন আইডিটি ইতিমধ্যে ব্যবহার করা হয়েছে।') {
+          throw error;
+        }
         handleFirestoreError(error, OperationType.WRITE, 'activationRequests/users');
       }
 
@@ -602,11 +647,25 @@ export function Dashboard() {
           "rounded-[2rem] p-10 border text-center space-y-6",
           theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
         )}>
-          <h3 className="text-xl font-black tracking-tight italic">
-            {profile?.status === 'pending' 
-              ? "আপনার অ্যাকাউন্টটি পেন্ডিং আছে! এডমিন আপনার পেমেন্ট ভেরিফাই করার পর একটিভ করে দিবে। ধন্যবাদ!!"
-              : "আপনার অ্যাকাউন্টটি একটিভ নয়! কাজ করার জন্য আপনার অ্যাকাউন্ট একটিভ করুন ধন্যবাদ!!"}
-          </h3>
+          <div className="space-y-4">
+            <h3 className="text-xl font-black tracking-tight italic">
+              {profile?.status === 'pending' 
+                ? "আপনার অ্যাকাউন্টটি পেন্ডিং আছে! এডমিন আপনার পেমেন্ট ভেরিফাই করার পর একটিভ করে দিবে। ধন্যবাদ!!"
+                : "আপনার অ্যাকাউন্টটি একটিভ নয়! কাজ করার জন্য আপনার অ্যাকাউন্ট একটিভ করুন ধন্যবাদ!!"}
+            </h3>
+            
+            {profile?.status === 'inactive' && latestActivationRequest?.status === 'rejected' && (
+              <div className={cn(
+                "p-4 rounded-2xl border text-left space-y-2",
+                theme === 'dark' ? "bg-rose-500/10 border-rose-500/20" : "bg-rose-50 border-rose-200"
+              )}>
+                <p className="text-xs font-black uppercase tracking-widest text-rose-500">রিজেকশন কারণ:</p>
+                <p className="text-sm font-bold">{latestActivationRequest.rejectionReason || 'Invalid payment details or screenshot.'}</p>
+                <p className="text-[10px] font-medium text-slate-500 italic">দয়া করে সঠিক তথ্য দিয়ে আবার চেষ্টা করুন।</p>
+              </div>
+            )}
+          </div>
+
           <button 
             onClick={() => setShowActivationModal(true)}
             disabled={profile?.status === 'pending'}
@@ -617,7 +676,7 @@ export function Dashboard() {
                 : "bg-blue-600 text-white shadow-blue-600/20 hover:scale-[1.02]"
             )}
           >
-            {profile?.status === 'pending' ? 'অনুমোদনের অপেক্ষায়' : 'এখানে ক্লিক করুন'}
+            {profile?.status === 'pending' ? 'অনুমোদনের অপেক্ষায়' : (profile?.status === 'inactive' && latestActivationRequest?.status === 'rejected' ? 'আবার চেষ্টা করুন' : 'এখানে ক্লিক করুন')}
           </button>
         </div>
       )}

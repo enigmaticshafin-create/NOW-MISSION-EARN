@@ -699,7 +699,8 @@ export function AdminPanel() {
             transaction.update(referrerRef, {
               referrals: increment(1),
               balance: increment(10),
-              inviteEarnings: increment(10)
+              inviteEarnings: increment(10),
+              totalEarned: increment(10)
             });
           }
         }
@@ -712,15 +713,33 @@ export function AdminPanel() {
   };
 
   const handleRejectActivation = async (id: string, userId: string) => {
+    const reason = window.prompt('Enter rejection reason (optional):');
     try {
       await runTransaction(db, async (transaction) => {
-        transaction.update(doc(db, 'activationRequests', id), { status: 'rejected' });
+        transaction.update(doc(db, 'activationRequests', id), { 
+          status: 'rejected',
+          rejectionReason: reason || 'Invalid payment details or screenshot.'
+        });
         transaction.update(doc(db, 'users', userId), { status: 'inactive' });
       });
       alert('Activation rejected!');
     } catch (error) {
       console.error("Reject activation error:", error);
       alert('Failed to reject activation.');
+    }
+  };
+
+  const handleReactivateActivation = async (id: string, userId: string) => {
+    if (!window.confirm('Reactivate this request? It will be moved back to pending.')) return;
+    try {
+      await runTransaction(db, async (transaction) => {
+        transaction.update(doc(db, 'activationRequests', id), { status: 'pending' });
+        transaction.update(doc(db, 'users', userId), { status: 'pending' });
+      });
+      alert('Activation moved back to pending!');
+    } catch (error) {
+      console.error("Reactivate activation error:", error);
+      alert('Failed to reactivate activation.');
     }
   };
 
@@ -1703,6 +1722,18 @@ export function AdminPanel() {
                           title="Reject Activation"
                         >
                           <X className="w-8 h-8" />
+                        </button>
+                      </div>
+                    )}
+
+                    {act.status === 'rejected' && (
+                      <div className="flex lg:flex-col gap-4 justify-center">
+                        <button 
+                          onClick={() => handleReactivateActivation(act.id, act.userId)}
+                          className="bg-amber-500 hover:bg-amber-600 text-white p-6 rounded-[1.5rem] transition-all active:scale-95 shadow-xl shadow-amber-500/20"
+                          title="Reactivate Request"
+                        >
+                          <History className="w-8 h-8" />
                         </button>
                       </div>
                     )}

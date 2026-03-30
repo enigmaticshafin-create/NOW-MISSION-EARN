@@ -100,6 +100,7 @@ export interface ActivationRequest {
   transactionId: string;
   screenshot?: string;
   status: 'pending' | 'approved' | 'rejected';
+  rejectionReason?: string;
   submittedAt: string;
 }
 
