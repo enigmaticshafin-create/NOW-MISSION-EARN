@@ -31,7 +31,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, getDocs, where, addDoc, doc, getDoc, updateDoc, setDoc, onSnapshot, orderBy, writeBatch } from 'firebase/firestore';
+import { collection, query, getDocs, where, addDoc, doc, getDoc, updateDoc, setDoc, onSnapshot, orderBy, writeBatch, runTransaction } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
 import { Mission, MissionSubmission, PaymentSettings, DynamicSettings } from '../types';
@@ -339,24 +339,21 @@ export function Dashboard() {
         submittedAt: new Date().toISOString()
       };
 
-      console.log('Saving activation request to Firestore...');
+      console.log('Saving activation request to Firestore using transaction...');
       try {
-        await addDoc(collection(db, 'activationRequests'), activationData);
-        console.log('Activation request saved.');
-      } catch (error) {
-        console.error('Firestore addDoc failed:', error);
-        handleFirestoreError(error, OperationType.CREATE, 'activationRequests');
-      }
-
-      console.log('Updating user status to pending...');
-      try {
-        await updateDoc(doc(db, 'users', user.uid), {
-          status: 'pending'
+        await runTransaction(db, async (transaction) => {
+          const activationRef = doc(collection(db, 'activationRequests'));
+          const userRef = doc(db, 'users', user.uid);
+          
+          transaction.set(activationRef, activationData);
+          transaction.update(userRef, {
+            status: 'pending'
+          });
         });
-        console.log('User status updated.');
+        console.log('Activation request saved and user status updated.');
       } catch (error) {
-        console.error('Firestore updateDoc failed:', error);
-        handleFirestoreError(error, OperationType.UPDATE, `users/${user.uid}`);
+        console.error('Firestore transaction failed:', error);
+        handleFirestoreError(error, OperationType.WRITE, 'activationRequests/users');
       }
 
       clearTimeout(safetyTimeout);

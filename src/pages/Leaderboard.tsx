@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, getDocs, orderBy, limit } from 'firebase/firestore';
+import { collection, query, getDocs, orderBy, limit, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useTheme } from '../context/ThemeContext';
 import { UserProfile } from '../types';
@@ -28,6 +28,7 @@ export default function Leaderboard() {
         // Fetch top referrers
         const referrersQuery = query(
           collection(db, 'users'), 
+          where('referrals', '>', 0),
           orderBy('referrals', 'desc'), 
           limit(20)
         );
@@ -38,6 +39,7 @@ export default function Leaderboard() {
         // Fetch top withdrawers
         const withdrawersQuery = query(
           collection(db, 'users'), 
+          where('totalWithdraw', '>', 0),
           orderBy('totalWithdraw', 'desc'), 
           limit(20)
         );
@@ -90,8 +92,8 @@ export default function Leaderboard() {
           <Trophy className="w-10 h-10 text-white -rotate-12" />
         </div>
         <div className="space-y-1">
-          <h2 className="text-4xl font-black tracking-tighter italic uppercase">Leaderboard</h2>
-          <p className="text-xs font-bold text-slate-500 uppercase tracking-[0.3em]">Top Performers of the Month</p>
+          <h2 className="text-4xl font-black tracking-tighter italic uppercase">লিডারবোর্ড</h2>
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-[0.3em]">মাসের সেরা পারফরমার</p>
         </div>
       </div>
 
@@ -109,7 +111,7 @@ export default function Leaderboard() {
               : "text-slate-500 hover:bg-slate-500/5"
           )}
         >
-          <Users className="w-4 h-4" /> Top Referrers
+          <Users className="w-4 h-4" /> সেরা রেফারার
         </button>
         <button 
           onClick={() => setActiveTab('withdrawers')}
@@ -120,103 +122,122 @@ export default function Leaderboard() {
               : "text-slate-500 hover:bg-slate-500/5"
           )}
         >
-          <ArrowUpCircle className="w-4 h-4" /> Top Withdrawers
+          <ArrowUpCircle className="w-4 h-4" /> সেরা উইথড্রয়ার
         </button>
       </div>
 
       {/* Top 3 Podium */}
-      <div className="grid grid-cols-3 items-end gap-4 pt-12">
-        {/* 2nd Place */}
-        {currentData[1] && (
-          <div className="space-y-4 text-center group">
-            <div className="relative inline-block">
-              <div className="w-20 h-20 rounded-3xl bg-slate-300 flex items-center justify-center rotate-6 shadow-xl group-hover:scale-110 transition-transform duration-500">
-                <Medal className="w-10 h-10 text-white -rotate-6" />
-                <div className="absolute inset-0 bg-white/20 rounded-3xl blur-xl group-hover:blur-2xl transition-all" />
+      {currentData.length > 0 && (
+        <div className="grid grid-cols-3 items-end gap-4 pt-12">
+          {/* 2nd Place */}
+          {currentData[1] && (
+            <div className="space-y-4 text-center group">
+              <div className="relative inline-block">
+                <div className="w-20 h-20 rounded-3xl bg-slate-300 flex items-center justify-center rotate-6 shadow-xl group-hover:scale-110 transition-transform duration-500">
+                  <Medal className="w-10 h-10 text-white -rotate-6" />
+                  <div className="absolute inset-0 bg-white/20 rounded-3xl blur-xl group-hover:blur-2xl transition-all" />
+                </div>
+                <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-white text-slate-900 rounded-full flex items-center justify-center font-black text-xs border-2 border-slate-300 shadow-lg">2</div>
               </div>
-              <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-white text-slate-900 rounded-full flex items-center justify-center font-black text-xs border-2 border-slate-300 shadow-lg">2</div>
+              <div className="space-y-1">
+                <p className="font-black text-sm truncate px-2">{currentData[1].userName}</p>
+                <p className="text-xs font-bold text-slate-500">
+                  {activeTab === 'referrers' ? `${currentData[1].referrals} রেফার` : `BDT ${currentData[1].totalWithdraw?.toFixed(0)}`}
+                </p>
+              </div>
             </div>
-            <div className="space-y-1">
-              <p className="font-black text-sm truncate px-2">{currentData[1].userName}</p>
-              <p className="text-xs font-bold text-slate-500">
-                {activeTab === 'referrers' ? `${currentData[1].referrals} Ref` : `BDT ${currentData[1].totalWithdraw?.toFixed(0)}`}
-              </p>
-            </div>
-          </div>
-        )}
+          )}
 
-        {/* 1st Place */}
-        {currentData[0] && (
-          <div className="space-y-4 text-center -mt-8 group">
-            <div className="relative inline-block">
-              <div className="w-28 h-28 rounded-[2.5rem] bg-gradient-to-br from-yellow-400 to-amber-500 flex items-center justify-center -rotate-6 shadow-2xl shadow-yellow-400/40 group-hover:scale-110 transition-transform duration-500">
-                <Crown className="w-14 h-14 text-white rotate-6 drop-shadow-lg" />
-                <div className="absolute inset-0 bg-yellow-400/30 rounded-[2.5rem] blur-2xl group-hover:blur-3xl transition-all animate-pulse" />
+          {/* 1st Place */}
+          {currentData[0] && (
+            <div className="space-y-4 text-center -mt-8 group">
+              <div className="relative inline-block">
+                <div className="w-28 h-28 rounded-[2.5rem] bg-gradient-to-br from-yellow-400 to-amber-500 flex items-center justify-center -rotate-6 shadow-2xl shadow-yellow-400/40 group-hover:scale-110 transition-transform duration-500">
+                  <Crown className="w-14 h-14 text-white rotate-6 drop-shadow-lg" />
+                  <div className="absolute inset-0 bg-yellow-400/30 rounded-[2.5rem] blur-2xl group-hover:blur-3xl transition-all animate-pulse" />
+                </div>
+                <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-white text-slate-900 rounded-full flex items-center justify-center font-black text-sm border-4 border-yellow-400 shadow-xl">1</div>
               </div>
-              <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-white text-slate-900 rounded-full flex items-center justify-center font-black text-sm border-4 border-yellow-400 shadow-xl">1</div>
+              <div className="space-y-1">
+                <p className="font-black text-lg truncate px-2 bg-gradient-to-r from-yellow-500 to-amber-600 bg-clip-text text-transparent">{currentData[0].userName}</p>
+                <p className="text-sm font-black text-pink-500">
+                  {activeTab === 'referrers' ? `${currentData[0].referrals} রেফার` : `BDT ${currentData[0].totalWithdraw?.toFixed(0)}`}
+                </p>
+              </div>
             </div>
-            <div className="space-y-1">
-              <p className="font-black text-lg truncate px-2 bg-gradient-to-r from-yellow-500 to-amber-600 bg-clip-text text-transparent">{currentData[0].userName}</p>
-              <p className="text-sm font-black text-pink-500">
-                {activeTab === 'referrers' ? `${currentData[0].referrals} Referrals` : `BDT ${currentData[0].totalWithdraw?.toFixed(0)}`}
-              </p>
-            </div>
-          </div>
-        )}
+          )}
 
-        {/* 3rd Place */}
-        {currentData[2] && (
-          <div className="space-y-4 text-center group">
-            <div className="relative inline-block">
-              <div className="w-20 h-20 rounded-3xl bg-amber-600 flex items-center justify-center -rotate-12 shadow-xl group-hover:scale-110 transition-transform duration-500">
-                <Medal className="w-10 h-10 text-white rotate-12" />
-                <div className="absolute inset-0 bg-amber-600/20 rounded-3xl blur-xl group-hover:blur-2xl transition-all" />
+          {/* 3rd Place */}
+          {currentData[2] && (
+            <div className="space-y-4 text-center group">
+              <div className="relative inline-block">
+                <div className="w-20 h-20 rounded-3xl bg-amber-600 flex items-center justify-center -rotate-12 shadow-xl group-hover:scale-110 transition-transform duration-500">
+                  <Medal className="w-10 h-10 text-white rotate-12" />
+                  <div className="absolute inset-0 bg-amber-600/20 rounded-3xl blur-xl group-hover:blur-2xl transition-all" />
+                </div>
+                <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-white text-slate-900 rounded-full flex items-center justify-center font-black text-xs border-2 border-amber-600 shadow-lg">3</div>
               </div>
-              <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-white text-slate-900 rounded-full flex items-center justify-center font-black text-xs border-2 border-amber-600 shadow-lg">3</div>
+              <div className="space-y-1">
+                <p className="font-black text-sm truncate px-2">{currentData[2].userName}</p>
+                <p className="text-xs font-bold text-slate-500">
+                  {activeTab === 'referrers' ? `${currentData[2].referrals} রেফার` : `BDT ${currentData[2].totalWithdraw?.toFixed(0)}`}
+                </p>
+              </div>
             </div>
-            <div className="space-y-1">
-              <p className="font-black text-sm truncate px-2">{currentData[2].userName}</p>
-              <p className="text-xs font-bold text-slate-500">
-                {activeTab === 'referrers' ? `${currentData[2].referrals} Ref` : `BDT ${currentData[2].totalWithdraw?.toFixed(0)}`}
-              </p>
-            </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
       {/* List View */}
       <div className="space-y-4">
-        {currentData.slice(3).map((player, index) => (
-          <div 
-            key={player.userId}
-            className={cn(
-              "rounded-3xl p-5 border flex items-center justify-between gap-4 transition-all hover:scale-[1.01]",
-              theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
-            )}
-          >
-            <div className="flex items-center gap-6">
-              <div className="w-10 h-10 rounded-2xl bg-slate-500/10 flex items-center justify-center shrink-0">
-                <span className="text-sm font-black text-slate-500">#{index + 4}</span>
-              </div>
-              <div>
-                <h4 className="font-black text-lg tracking-tight">{player.userName}</h4>
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">ID: {player.userId}</p>
-              </div>
+        {currentData.length === 0 ? (
+          <div className={cn(
+            "rounded-3xl p-12 border text-center space-y-4",
+            theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
+          )}>
+            <div className="w-16 h-16 bg-slate-500/10 rounded-2xl flex items-center justify-center mx-auto">
+              <TrendingUp className="w-8 h-8 text-slate-400" />
             </div>
-
-            <div className="text-right space-y-1">
-              <p className={cn(
-                "text-lg font-black tracking-tight",
-                activeTab === 'referrers' ? "text-pink-500" : "text-emerald-500"
-              )}>
-                {activeTab === 'referrers' ? player.referrals : `BDT ${player.totalWithdraw?.toFixed(0)}`}
-              </p>
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                {activeTab === 'referrers' ? 'Referrals' : 'Withdrawn'}
-              </p>
+            <div className="space-y-1">
+              <p className="font-black text-lg uppercase tracking-tight">এখনও কোনো তথ্য নেই</p>
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">শীর্ষে পৌঁছাতে প্রথম হোন!</p>
             </div>
           </div>
-        ))}
+        ) : (
+          <>
+            {currentData.slice(3).map((player, index) => (
+              <div 
+                key={player.userId}
+                className={cn(
+                  "rounded-3xl p-5 border flex items-center justify-between gap-4 transition-all hover:scale-[1.01]",
+                  theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
+                )}
+              >
+                <div className="flex items-center gap-6">
+                  <div className="w-10 h-10 rounded-2xl bg-slate-500/10 flex items-center justify-center shrink-0">
+                    <span className="text-sm font-black text-slate-500">#{index + 4}</span>
+                  </div>
+                  <div>
+                    <h4 className="font-black text-lg tracking-tight">{player.userName}</h4>
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">ID: {player.userId}</p>
+                  </div>
+                </div>
+
+                <div className="text-right space-y-1">
+                  <p className={cn(
+                    "text-lg font-black tracking-tight",
+                    activeTab === 'referrers' ? "text-pink-500" : "text-emerald-500"
+                  )}>
+                    {activeTab === 'referrers' ? player.referrals : `BDT ${player.totalWithdraw?.toFixed(0)}`}
+                  </p>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                    {activeTab === 'referrers' ? 'রেফার' : 'উইথড্র'}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </>
+        )}
       </div>
     </div>
   );

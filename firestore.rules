@@ -106,12 +106,16 @@ service cloud.firestore {
              data.amount is number && data.amount > 0 &&
              data.status in ['pending', 'completed', 'rejected'] &&
              data.method is string && data.method.size() > 0 && data.method.size() < 500 &&
-             isValidDateString(data.requestedAt);
+             isValidDateString(data.submittedAt);
     }
 
     function isValidActivationRequest(data) {
       return data.userId is string && data.userId == request.auth.uid &&
+             data.userName is string && data.userName.size() > 0 &&
+             data.userSequentialId is string && data.userSequentialId.size() > 0 &&
+             data.userEmail is string && isValidEmail(data.userEmail) &&
              data.method in ['bKash', 'Nagad', 'Rocket'] &&
+             data.senderNumber is string && data.senderNumber.size() > 0 && data.senderNumber.size() < 20 &&
              data.paymentNumber is string && data.paymentNumber.size() > 0 && data.paymentNumber.size() < 20 &&
              data.amount is number && data.amount >= 0 &&
              data.transactionId is string && data.transactionId.size() > 0 && data.transactionId.size() < 50 &&

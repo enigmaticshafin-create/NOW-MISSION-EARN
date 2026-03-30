@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, getDocs, addDoc, doc, getDoc, writeBatch, where } from 'firebase/firestore';
+import { collection, query, getDocs, addDoc, doc, getDoc, writeBatch, where, increment } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
@@ -89,8 +89,7 @@ export default function Withdraw() {
       // 2. Deduct balance (optimistic)
       const userRef = doc(db, 'users', user.uid);
       batch.update(userRef, {
-        balance: (profile.balance || 0) - withdrawAmount,
-        totalWithdraw: (profile.totalWithdraw || 0) + withdrawAmount
+        balance: increment(-withdrawAmount)
       });
 
       await batch.commit();

@@ -284,6 +284,17 @@ export const Profile: React.FC = () => {
           "rounded-3xl p-6 border space-y-2",
           theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
         )}>
+          <div className="w-10 h-10 bg-rose-500 rounded-xl flex items-center justify-center mb-4">
+            <ArrowUpRight className="w-5 h-5 text-white" />
+          </div>
+          <p className="text-slate-500 font-black uppercase tracking-widest text-[10px]">Total Withdraw</p>
+          <h3 className="text-3xl font-black text-rose-500">${(profile?.totalWithdraw || 0).toFixed(2)}</h3>
+        </div>
+
+        <div className={cn(
+          "rounded-3xl p-6 border space-y-2",
+          theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
+        )}>
           <div className="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center mb-4">
             <Users className="w-5 h-5 text-white" />
           </div>

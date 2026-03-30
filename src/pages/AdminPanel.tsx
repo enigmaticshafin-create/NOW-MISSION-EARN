@@ -553,9 +553,19 @@ export function AdminPanel() {
 
   const handleCompleteWithdrawal = async (withdrawal: Withdrawal) => {
     try {
-      await updateDoc(doc(db, 'withdrawals', withdrawal.id), { status: 'completed' });
+      await runTransaction(db, async (transaction) => {
+        const withdrawalRef = doc(db, 'withdrawals', withdrawal.id);
+        const userRef = doc(db, 'users', withdrawal.userId);
+        
+        transaction.update(withdrawalRef, { status: 'completed' });
+        transaction.update(userRef, { 
+          totalWithdraw: increment(withdrawal.amount) 
+        });
+      });
+      alert('Withdrawal completed successfully!');
     } catch (error) {
       console.error("Complete withdrawal error:", error);
+      alert('Failed to complete withdrawal.');
     }
   };
 
