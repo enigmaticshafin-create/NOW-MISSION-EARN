@@ -127,6 +127,7 @@ export default function SellPage({ type }: SellPageProps) {
         userName: profile.userName,
         userSequentialId: profile.userId,
         type,
+        platform: type, // Add platform for AdminPanel compatibility
         price: currentPrice,
         description: form.description,
         screenshot: screenshotUrl,
@@ -136,18 +137,20 @@ export default function SellPage({ type }: SellPageProps) {
 
       if (type === 'Facebook' || type === 'Instagram') {
         submissionData.name = form.name;
+        submissionData.idName = form.name; // Add idName for AdminPanel compatibility
         submissionData.username = form.username;
         submissionData.email = form.email;
         submissionData.password = form.password;
         submissionData.twoFactor = form.twoFactor;
       } else if (type === 'Gmail') {
         submissionData.gmail = form.gmail;
+        submissionData.email = form.gmail; // Add email for AdminPanel compatibility
         submissionData.password = form.password;
       }
 
       await addDoc(collection(db, 'socialSells'), submissionData);
 
-      setMessage({ type: 'success', text: 'Your sell request has been submitted for review!' });
+      setMessage({ type: 'success', text: 'Your sell request has been submitted for review! (আপনার বিক্রয় অনুরোধটি পর্যালোচনার জন্য জমা দেওয়া হয়েছে!)' });
       setForm({
         name: '',
         username: '',
@@ -161,7 +164,7 @@ export default function SellPage({ type }: SellPageProps) {
       setScreenshot(null);
     } catch (error) {
       console.error('Error submitting sell request:', error);
-      setMessage({ type: 'error', text: 'Failed to submit request. Please try again.' });
+      setMessage({ type: 'error', text: 'Failed to submit request. Please try again. (অনুরোধ জমা দিতে ব্যর্থ হয়েছে। আবার চেষ্টা করুন।)' });
     } finally {
       setIsSubmitting(false);
     }
@@ -211,6 +214,42 @@ export default function SellPage({ type }: SellPageProps) {
           <h2 className="text-3xl font-black tracking-tight italic uppercase">{type} Sell</h2>
           <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Price: <span className="text-pink-500">{currentPrice} BDT</span></p>
         </div>
+      </div>
+
+      {/* Password Generation Section at the Top */}
+      <div className={cn(
+        "p-6 rounded-3xl border space-y-4",
+        theme === 'dark' ? "bg-pink-500/5 border-pink-500/20" : "bg-pink-50 border-pink-100"
+      )}>
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-black uppercase tracking-widest text-pink-500 italic">Password Management</h3>
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Generate a strong password for your account</p>
+          </div>
+          <button 
+            type="button"
+            onClick={generatePassword}
+            className="flex items-center gap-2 px-4 py-2 bg-pink-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-pink-500/20 hover:scale-105 transition-all"
+          >
+            <RefreshCw className="w-3 h-3" />
+            Set Password
+          </button>
+        </div>
+        {form.password && (
+          <div className={cn(
+            "p-3 rounded-xl border flex items-center justify-between gap-3",
+            theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-white border-slate-200"
+          )}>
+            <code className="text-sm font-mono font-bold text-pink-500">{form.password}</code>
+            <button 
+              type="button"
+              onClick={() => copyToClipboard(form.password)}
+              className="p-2 hover:bg-pink-500/10 rounded-lg text-pink-500 transition-colors"
+            >
+              <Copy className="w-4 h-4" />
+            </button>
+          </div>
+        )}
       </div>
 
       {settings?.approvalMessage && (
@@ -342,37 +381,17 @@ export default function SellPage({ type }: SellPageProps) {
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Password</label>
                   <span className="text-[9px] font-bold text-pink-500 italic">Password must be strong</span>
                 </div>
-                <div className="relative">
-                  <input 
-                    type="text"
-                    value={form.password}
-                    onChange={(e) => setForm({ ...form, password: e.target.value })}
-                    placeholder="Enter strong password"
-                    className={cn(
-                      "w-full px-6 py-4 rounded-2xl border focus:ring-2 focus:ring-pink-500 transition-all text-sm font-bold pr-24",
-                      theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
-                    )}
-                    required
-                  />
-                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
-                    <button 
-                      type="button"
-                      onClick={generatePassword}
-                      className="p-2 hover:bg-pink-500/10 rounded-xl text-pink-500 transition-colors"
-                      title="Generate Password"
-                    >
-                      <RefreshCw className="w-4 h-4" />
-                    </button>
-                    <button 
-                      type="button"
-                      onClick={() => copyToClipboard(form.password)}
-                      className="p-2 hover:bg-pink-500/10 rounded-xl text-pink-500 transition-colors"
-                      title="Copy Password"
-                    >
-                      <Copy className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
+                <input 
+                  type="text"
+                  value={form.password}
+                  onChange={(e) => setForm({ ...form, password: e.target.value })}
+                  placeholder="Enter strong password"
+                  className={cn(
+                    "w-full px-6 py-4 rounded-2xl border focus:ring-2 focus:ring-pink-500 transition-all text-sm font-bold",
+                    theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
+                  )}
+                  required
+                />
               </div>
             </>
           )}

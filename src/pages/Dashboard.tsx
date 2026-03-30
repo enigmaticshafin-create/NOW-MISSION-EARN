@@ -242,29 +242,43 @@ export function Dashboard() {
 
   const handleActivationSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !profile) return;
+    if (!user || !profile || isActivating) return;
 
     if (!paymentSettings) {
-      setMessage({ type: 'error', text: 'Payment settings not loaded. Please wait a moment and try again.' });
+      setMessage({ type: 'error', text: 'Payment settings not loaded. Please wait a moment and try again. (পেমেন্ট সেটিংস লোড হয়নি। দয়া করে কিছুক্ষণ অপেক্ষা করে আবার চেষ্টা করুন।)' });
       return;
     }
 
     if (!senderNumber || !transactionId) {
-      setMessage({ type: 'error', text: 'Please fill in all required fields.' });
+      setMessage({ type: 'error', text: 'Please fill in all required fields. (দয়া করে সব প্রয়োজনীয় তথ্য পূরণ করুন।)' });
       return;
     }
 
+    console.log('Starting activation submission...');
     setIsActivating(true);
+    setMessage(null);
+
+    // Safety timeout to reset the button if it hangs for more than 30 seconds
+    const safetyTimeout = setTimeout(() => {
+      if (isActivating) {
+        console.warn('Activation submission timed out.');
+        setIsActivating(false);
+        setMessage({ type: 'error', text: 'Submission timed out. Please check your internet and try again. (সাবমিশন টাইমআউট হয়েছে। দয়া করে ইন্টারনেট চেক করে আবার চেষ্টা করুন।)' });
+      }
+    }, 30000);
+
     try {
       let screenshotUrl = '';
       if (screenshot) {
+        console.log('Uploading screenshot...');
         try {
           const storageRef = ref(storage, `activations/${user.uid}/${Date.now()}_${screenshot.name}`);
-          await uploadBytes(storageRef, screenshot);
-          screenshotUrl = await getDownloadURL(storageRef);
+          const uploadResult = await uploadBytes(storageRef, screenshot);
+          screenshotUrl = await getDownloadURL(uploadResult.ref);
+          console.log('Screenshot uploaded successfully:', screenshotUrl);
         } catch (storageErr) {
           console.error('Error uploading screenshot:', storageErr);
-          throw new Error('Failed to upload screenshot. Please check your internet connection and try again.');
+          throw new Error('Failed to upload screenshot. Please check your internet connection and try again. (স্ক্রিনশট আপলোড করতে ব্যর্থ হয়েছে। দয়া করে ইন্টারনেট চেক করে আবার চেষ্টা করুন।)');
         }
       }
 
@@ -285,22 +299,28 @@ export function Dashboard() {
         submittedAt: new Date().toISOString()
       };
 
+      console.log('Saving activation request to Firestore...');
       try {
         await addDoc(collection(db, 'activationRequests'), activationData);
+        console.log('Activation request saved.');
       } catch (error) {
+        console.error('Firestore addDoc failed:', error);
         handleFirestoreError(error, OperationType.CREATE, 'activationRequests');
       }
 
-      // Update user status to pending
+      console.log('Updating user status to pending...');
       try {
         await updateDoc(doc(db, 'users', user.uid), {
           status: 'pending'
         });
+        console.log('User status updated.');
       } catch (error) {
+        console.error('Firestore updateDoc failed:', error);
         handleFirestoreError(error, OperationType.UPDATE, `users/${user.uid}`);
       }
 
-      setMessage({ type: 'success', text: 'Activation request submitted successfully!' });
+      clearTimeout(safetyTimeout);
+      setMessage({ type: 'success', text: 'Activation request submitted successfully! (অ্যাক্টিভেশন রিকোয়েস্ট সফলভাবে জমা দেওয়া হয়েছে!)' });
       setTransactionId('');
       setSenderNumber('');
       setScreenshot(null);
@@ -308,7 +328,7 @@ export function Dashboard() {
       // Close modal after a short delay
       setTimeout(() => {
         setShowActivationModal(false);
-      }, 1000);
+      }, 2000);
       
       // If user is admin/ceo, they might want to go to admin panel to approve
       if (profile.role === 'admin' || profile.role === 'ceo') {
@@ -317,13 +337,14 @@ export function Dashboard() {
         }, 3000);
       }
     } catch (error: any) {
+      clearTimeout(safetyTimeout);
       console.error('Error submitting activation:', error);
-      let errorMsg = 'Failed to submit activation request. Please try again.';
+      let errorMsg = 'Failed to submit activation request. Please try again. (অ্যাক্টিভেশন রিকোয়েস্ট জমা দিতে ব্যর্থ হয়েছে। আবার চেষ্টা করুন।)';
       
       try {
         const parsedError = JSON.parse(error.message);
         if (parsedError.error.includes('permission-denied')) {
-          errorMsg = 'Permission denied. Please ensure your payment details are correct and try again.';
+          errorMsg = 'Permission denied. Please ensure your payment details are correct and try again. (অনুমতি নেই। দয়া করে নিশ্চিত করুন যে আপনার পেমেন্ট ডিটেইলস সঠিক এবং আবার চেষ্টা করুন।)';
         } else {
           errorMsg = parsedError.error;
         }
@@ -332,8 +353,11 @@ export function Dashboard() {
       }
       
       setMessage({ type: 'error', text: errorMsg });
+      // Also show alert for visibility
+      window.alert(errorMsg);
     } finally {
       setIsActivating(false);
+      console.log('Activation submission process finished.');
     }
   };
 
