@@ -147,6 +147,7 @@ export interface SocialSellSubmission {
   screenshot?: string;
   // Gmail fields
   gmail?: string;
+  price?: number;
 }
 
 export interface SocialSellSettings {
@@ -154,6 +155,10 @@ export interface SocialSellSettings {
   facebookPrice: number;
   instagramPrice: number;
   telegramPrice: number;
+  gmailPassword?: string;
+  facebookPassword?: string;
+  instagramPassword?: string;
+  telegramPassword?: string;
   telegramSupport: string;
   approvalMessage: string;
 }

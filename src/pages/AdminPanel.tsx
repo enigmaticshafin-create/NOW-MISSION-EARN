@@ -6,7 +6,8 @@ import {
   Plus, Check, X, Users as UsersIcon, ListTodo, Landmark, Eye, 
   ShieldCheck, AlertCircle, Clock, CheckCircle2, TrendingUp, 
   UserPlus, Ban, Search, Filter, ArrowUpRight, History, Trash2, Edit3, ExternalLink, DollarSign, Settings as SettingsIcon, Save,
-  Gift, Award, ArrowDownCircle, ArrowUpCircle, Copy, XCircle, Share2, Smartphone, ShieldAlert, Loader2, Zap
+  Gift, Award, ArrowDownCircle, ArrowUpCircle, Copy, XCircle, Share2, Smartphone, ShieldAlert, Loader2, Zap,
+  Mail, Facebook, Instagram, Send, MessageCircle
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useTheme } from '../context/ThemeContext';
@@ -54,7 +55,7 @@ export function AdminPanel() {
   });
   const [newGiftCode, setNewGiftCode] = useState({ code: '', amount: '', maxUses: '' });
   const [newLevel, setNewLevel] = useState({ level: '', name: '', minReferrals: '' });
-  const [withdrawSettings, setWithdrawSettings] = useState({ minWithdraw: 500, maxWithdraw: 10000 });
+  const [withdrawSettings, setWithdrawSettings] = useState({ minWithdraw: 110, maxWithdraw: 120000 });
   const [depositSettings, setDepositSettings] = useState({ bkash: '', nagad: '', rocket: '' });
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddMission, setShowAddMission] = useState(false);
@@ -357,25 +358,25 @@ export function AdminPanel() {
         
         const userData = userSnap.data() as UserProfile;
         
-        // Determine price based on type
-        let price = 0;
+        // Use price from submission if available, otherwise fallback to current settings
+        let price = sell.price || 0;
         let balanceField = '';
         
-        switch(sell.type) {
+        switch(sell.type || sell.platform) {
           case 'Gmail':
-            price = socialSellSettings.gmailPrice;
+            if (!price) price = socialSellSettings.gmailPrice;
             balanceField = 'gmailBalance';
             break;
           case 'Facebook':
-            price = socialSellSettings.facebookPrice;
+            if (!price) price = socialSellSettings.facebookPrice;
             balanceField = 'facebookBalance';
             break;
           case 'Instagram':
-            price = socialSellSettings.instagramPrice;
+            if (!price) price = socialSellSettings.instagramPrice;
             balanceField = 'instagramBalance';
             break;
           case 'Telegram':
-            price = socialSellSettings.telegramPrice;
+            if (!price) price = socialSellSettings.telegramPrice;
             balanceField = 'telegramBalance';
             break;
         }
@@ -390,6 +391,27 @@ export function AdminPanel() {
       alert('Sell request approved and balance added!');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `socialSells/${sell.id}`);
+    }
+  };
+
+  const handleSendNotification = async (userId: string) => {
+    const title = window.prompt('Enter notification title:');
+    if (!title) return;
+    const message = window.prompt('Enter notification message:');
+    if (!message) return;
+
+    try {
+      await addDoc(collection(db, 'notifications'), {
+        userId,
+        title,
+        message,
+        read: false,
+        createdAt: new Date().toISOString()
+      });
+      alert('Notification sent successfully!');
+    } catch (error) {
+      console.error('Error sending notification:', error);
+      alert('Failed to send notification.');
     }
   };
 
@@ -665,7 +687,9 @@ export function AdminPanel() {
             const referrerUid = lookupSnap.data().uid;
             const referrerRef = doc(db, 'users', referrerUid);
             transaction.update(referrerRef, {
-              referrals: increment(1)
+              referrals: increment(1),
+              balance: increment(10),
+              inviteEarnings: increment(10)
             });
           }
         }
@@ -677,11 +701,16 @@ export function AdminPanel() {
     }
   };
 
-  const handleRejectActivation = async (id: string) => {
+  const handleRejectActivation = async (id: string, userId: string) => {
     try {
-      await updateDoc(doc(db, 'activationRequests', id), { status: 'rejected' });
+      await runTransaction(db, async (transaction) => {
+        transaction.update(doc(db, 'activationRequests', id), { status: 'rejected' });
+        transaction.update(doc(db, 'users', userId), { status: 'inactive' });
+      });
+      alert('Activation rejected!');
     } catch (error) {
       console.error("Reject activation error:", error);
+      alert('Failed to reject activation.');
     }
   };
 
@@ -995,74 +1024,169 @@ export function AdminPanel() {
         <div className="min-h-[400px]">
           {activeTab === 'quicksetup' && (
             <div className="space-y-10 max-w-4xl mx-auto">
-              {/* Price Settings */}
+              {/* Price & Password Settings */}
               <div className={cn(
                 "rounded-[3rem] p-10 border space-y-10",
                 theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
               )}>
                 <div className="space-y-2">
-                  <h3 className="text-2xl font-black tracking-tighter italic uppercase">Price <span className="text-pink-500">Settings</span></h3>
-                  <p className="text-slate-500 font-black uppercase tracking-[0.2em] text-[10px]">Change the price of social media accounts</p>
+                  <h3 className="text-2xl font-black tracking-tighter italic uppercase">Price & Password <span className="text-pink-500">Settings</span></h3>
+                  <p className="text-slate-500 font-black uppercase tracking-[0.2em] text-[10px]">Change the price and default passwords for social media accounts</p>
                 </div>
 
-                <form onSubmit={handleUpdateSocialSellSettings} className="space-y-6">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Gmail Price (BDT)</label>
-                      <input 
-                        type="number"
-                        value={socialSellSettings.gmailPrice}
-                        onChange={e => setSocialSellSettings({...socialSellSettings, gmailPrice: Number(e.target.value)})}
-                        className={cn(
-                          "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500",
-                          theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
-                        )}
-                      />
+                <form onSubmit={handleUpdateSocialSellSettings} className="space-y-8">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {/* Gmail */}
+                    <div className="space-y-4 p-6 rounded-3xl bg-slate-500/5 border border-slate-500/10">
+                      <div className="flex items-center gap-3">
+                        <Mail className="w-5 h-5 text-red-500" />
+                        <h4 className="font-black uppercase tracking-widest text-xs italic">Gmail</h4>
+                      </div>
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest px-2">Price (BDT)</label>
+                          <input 
+                            type="number"
+                            value={socialSellSettings.gmailPrice}
+                            onChange={e => setSocialSellSettings({...socialSellSettings, gmailPrice: Number(e.target.value)})}
+                            className={cn(
+                              "w-full rounded-xl p-3 text-sm font-bold border outline-none focus:border-pink-500",
+                              theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-white border-slate-200"
+                            )}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest px-2">password set</label>
+                          <div className="relative">
+                            <input 
+                              value={socialSellSettings.gmailPassword || ''}
+                              onChange={e => setSocialSellSettings({...socialSellSettings, gmailPassword: e.target.value})}
+                              className={cn(
+                                "w-full rounded-xl p-3 pr-10 text-sm font-bold border outline-none focus:border-pink-500",
+                                theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-white border-slate-200"
+                              )}
+                            />
+                            <button type="button" onClick={() => { navigator.clipboard.writeText(socialSellSettings.gmailPassword || ''); alert('Copied!'); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-pink-500"><Copy className="w-3 h-3" /></button>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Facebook Price (BDT)</label>
-                      <input 
-                        type="number"
-                        value={socialSellSettings.facebookPrice}
-                        onChange={e => setSocialSellSettings({...socialSellSettings, facebookPrice: Number(e.target.value)})}
-                        className={cn(
-                          "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500",
-                          theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
-                        )}
-                      />
+
+                    {/* Facebook */}
+                    <div className="space-y-4 p-6 rounded-3xl bg-slate-500/5 border border-slate-500/10">
+                      <div className="flex items-center gap-3">
+                        <Facebook className="w-5 h-5 text-blue-600" />
+                        <h4 className="font-black uppercase tracking-widest text-xs italic">Facebook</h4>
+                      </div>
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest px-2">Price (BDT)</label>
+                          <input 
+                            type="number"
+                            value={socialSellSettings.facebookPrice}
+                            onChange={e => setSocialSellSettings({...socialSellSettings, facebookPrice: Number(e.target.value)})}
+                            className={cn(
+                              "w-full rounded-xl p-3 text-sm font-bold border outline-none focus:border-pink-500",
+                              theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-white border-slate-200"
+                            )}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest px-2">password set</label>
+                          <div className="relative">
+                            <input 
+                              value={socialSellSettings.facebookPassword || ''}
+                              onChange={e => setSocialSellSettings({...socialSellSettings, facebookPassword: e.target.value})}
+                              className={cn(
+                                "w-full rounded-xl p-3 pr-10 text-sm font-bold border outline-none focus:border-pink-500",
+                                theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-white border-slate-200"
+                              )}
+                            />
+                            <button type="button" onClick={() => { navigator.clipboard.writeText(socialSellSettings.facebookPassword || ''); alert('Copied!'); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-pink-500"><Copy className="w-3 h-3" /></button>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Instagram Price (BDT)</label>
-                      <input 
-                        type="number"
-                        value={socialSellSettings.instagramPrice}
-                        onChange={e => setSocialSellSettings({...socialSellSettings, instagramPrice: Number(e.target.value)})}
-                        className={cn(
-                          "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500",
-                          theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
-                        )}
-                      />
+
+                    {/* Instagram */}
+                    <div className="space-y-4 p-6 rounded-3xl bg-slate-500/5 border border-slate-500/10">
+                      <div className="flex items-center gap-3">
+                        <Instagram className="w-5 h-5 text-pink-600" />
+                        <h4 className="font-black uppercase tracking-widest text-xs italic">Instagram</h4>
+                      </div>
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest px-2">Price (BDT)</label>
+                          <input 
+                            type="number"
+                            value={socialSellSettings.instagramPrice}
+                            onChange={e => setSocialSellSettings({...socialSellSettings, instagramPrice: Number(e.target.value)})}
+                            className={cn(
+                              "w-full rounded-xl p-3 text-sm font-bold border outline-none focus:border-pink-500",
+                              theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-white border-slate-200"
+                            )}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest px-2">password set</label>
+                          <div className="relative">
+                            <input 
+                              value={socialSellSettings.instagramPassword || ''}
+                              onChange={e => setSocialSellSettings({...socialSellSettings, instagramPassword: e.target.value})}
+                              className={cn(
+                                "w-full rounded-xl p-3 pr-10 text-sm font-bold border outline-none focus:border-pink-500",
+                                theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-white border-slate-200"
+                              )}
+                            />
+                            <button type="button" onClick={() => { navigator.clipboard.writeText(socialSellSettings.instagramPassword || ''); alert('Copied!'); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-pink-500"><Copy className="w-3 h-3" /></button>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Telegram Price (BDT)</label>
-                      <input 
-                        type="number"
-                        value={socialSellSettings.telegramPrice}
-                        onChange={e => setSocialSellSettings({...socialSellSettings, telegramPrice: Number(e.target.value)})}
-                        className={cn(
-                          "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500",
-                          theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
-                        )}
-                      />
+
+                    {/* Telegram */}
+                    <div className="space-y-4 p-6 rounded-3xl bg-slate-500/5 border border-slate-500/10">
+                      <div className="flex items-center gap-3">
+                        <Send className="w-5 h-5 text-sky-500" />
+                        <h4 className="font-black uppercase tracking-widest text-xs italic">Telegram</h4>
+                      </div>
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest px-2">Price (BDT)</label>
+                          <input 
+                            type="number"
+                            value={socialSellSettings.telegramPrice}
+                            onChange={e => setSocialSellSettings({...socialSellSettings, telegramPrice: Number(e.target.value)})}
+                            className={cn(
+                              "w-full rounded-xl p-3 text-sm font-bold border outline-none focus:border-pink-500",
+                              theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-white border-slate-200"
+                            )}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest px-2">password set</label>
+                          <div className="relative">
+                            <input 
+                              value={socialSellSettings.telegramPassword || ''}
+                              onChange={e => setSocialSellSettings({...socialSellSettings, telegramPassword: e.target.value})}
+                              className={cn(
+                                "w-full rounded-xl p-3 pr-10 text-sm font-bold border outline-none focus:border-pink-500",
+                                theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-white border-slate-200"
+                              )}
+                            />
+                            <button type="button" onClick={() => { navigator.clipboard.writeText(socialSellSettings.telegramPassword || ''); alert('Copied!'); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-pink-500"><Copy className="w-3 h-3" /></button>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                   <button 
                     type="submit" 
                     disabled={isSubmitting}
-                    className="w-full bg-pink-500 text-white font-black py-4 rounded-2xl shadow-lg shadow-pink-500/20 uppercase tracking-widest text-xs flex items-center justify-center gap-2 disabled:opacity-50"
+                    className="w-full bg-pink-500 text-white font-black py-5 rounded-2xl shadow-xl shadow-pink-500/20 uppercase tracking-widest text-xs flex items-center justify-center gap-2 disabled:opacity-50"
                   >
-                    {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                    Save Prices
+                    {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+                    Save Price & Password Settings
                   </button>
                 </form>
               </div>
@@ -1564,7 +1688,7 @@ export function AdminPanel() {
                           <Check className="w-8 h-8" />
                         </button>
                         <button 
-                          onClick={() => handleRejectActivation(act.id)}
+                          onClick={() => handleRejectActivation(act.id, act.userId)}
                           className="bg-rose-500 hover:bg-rose-600 text-white p-6 rounded-[1.5rem] transition-all active:scale-95 shadow-xl shadow-rose-500/20"
                           title="Reject Activation"
                         >
@@ -2009,30 +2133,30 @@ export function AdminPanel() {
 
                   <form onSubmit={handleUpdateWithdrawSettings} className="space-y-6">
                     <div className="space-y-4">
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Min Withdrawal (BDT)</label>
-                        <input 
-                          type="number"
-                          value={withdrawSettings.minWithdraw}
-                          onChange={e => setWithdrawSettings({...withdrawSettings, minWithdraw: Number(e.target.value)})}
-                          className={cn(
-                            "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500",
-                            theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
-                          )}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Max Withdrawal (BDT)</label>
-                        <input 
-                          type="number"
-                          value={withdrawSettings.maxWithdraw}
-                          onChange={e => setWithdrawSettings({...withdrawSettings, maxWithdraw: Number(e.target.value)})}
-                          className={cn(
-                            "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500",
-                            theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
-                          )}
-                        />
-                      </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Min Withdrawal (BDT)</label>
+                          <input 
+                            type="number"
+                            value={withdrawSettings.minWithdraw}
+                            onChange={e => setWithdrawSettings({...withdrawSettings, minWithdraw: Number(e.target.value)})}
+                            className={cn(
+                              "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500",
+                              theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
+                            )}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Max Withdrawal (BDT / USD Equivalent)</label>
+                          <input 
+                            type="number"
+                            value={withdrawSettings.maxWithdraw}
+                            onChange={e => setWithdrawSettings({...withdrawSettings, maxWithdraw: Number(e.target.value)})}
+                            className={cn(
+                              "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500",
+                              theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
+                            )}
+                          />
+                        </div>
                     </div>
                     <button 
                       type="submit" 
@@ -2348,6 +2472,12 @@ export function AdminPanel() {
                           className="px-8 py-4 bg-rose-500 text-white rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl shadow-rose-500/20 transition-all hover:scale-105 active:scale-95 flex items-center gap-2"
                         >
                           <XCircle className="w-4 h-4" /> Reject
+                        </button>
+                        <button 
+                          onClick={() => handleSendNotification(sell.userId)}
+                          className="px-8 py-4 bg-blue-500 text-white rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl shadow-blue-500/20 transition-all hover:scale-105 active:scale-95 flex items-center gap-2"
+                        >
+                          <MessageCircle className="w-4 h-4" /> Notify
                         </button>
                       </div>
                     )}

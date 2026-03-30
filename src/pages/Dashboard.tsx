@@ -26,11 +26,12 @@ import {
   X,
   Clock,
   XCircle,
-  Zap
+  Zap,
+  Bell
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, getDocs, where, addDoc, doc, getDoc, updateDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { collection, query, getDocs, where, addDoc, doc, getDoc, updateDoc, setDoc, onSnapshot, orderBy, writeBatch } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
 import { Mission, MissionSubmission, PaymentSettings, DynamicSettings } from '../types';
@@ -104,6 +105,8 @@ export function Dashboard() {
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   const [pendingSells, setPendingSells] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   useEffect(() => {
     // Listen to dynamic settings
@@ -133,8 +136,45 @@ export function Dashboard() {
       setPendingSells(sells);
     });
 
-    return () => unsubscribe();
+    // Listen to user's notifications
+    const notifQ = query(
+      collection(db, 'notifications'),
+      where('userId', '==', user.uid),
+      orderBy('createdAt', 'desc')
+    );
+
+    const unsubscribeNotif = onSnapshot(notifQ, (snapshot) => {
+      const notifs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setNotifications(notifs);
+    });
+
+    return () => {
+      unsubscribe();
+      unsubscribeNotif();
+    };
   }, [user]);
+
+  const unreadCount = notifications.filter(n => !n.read).length;
+
+  const markAsRead = async (notifId: string) => {
+    try {
+      await updateDoc(doc(db, 'notifications', notifId), { read: true });
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
+  };
+
+  const markAllAsRead = async () => {
+    try {
+      const batch = writeBatch(db);
+      notifications.filter(n => !n.read).forEach(n => {
+        batch.update(doc(db, 'notifications', n.id), { read: true });
+      });
+      await batch.commit();
+    } catch (error) {
+      console.error('Error marking all as read:', error);
+    }
+  };
 
   const hasOldPendingSells = pendingSells.some(sell => {
     if (!sell.submittedAt) return false;
@@ -237,7 +277,7 @@ export function Dashboard() {
     const baseUrl = window.location.origin;
     const link = `${baseUrl}/register?referBy=${profile?.referralCode ? profile.referralCode : (profile?.userId ? profile.userId : '')}`;
     navigator.clipboard.writeText(link);
-    alert('Referral link copied to clipboard!');
+    alert('রেফারেল লিঙ্ক ক্লিপবোর্ডে কপি করা হয়েছে!');
   };
 
   const handleActivationSubmit = async (e: React.FormEvent) => {
@@ -245,12 +285,12 @@ export function Dashboard() {
     if (!user || !profile || isActivating) return;
 
     if (!paymentSettings) {
-      setMessage({ type: 'error', text: 'Payment settings not loaded. Please wait a moment and try again. (পেমেন্ট সেটিংস লোড হয়নি। দয়া করে কিছুক্ষণ অপেক্ষা করে আবার চেষ্টা করুন।)' });
+      setMessage({ type: 'error', text: 'পেমেন্ট সেটিংস লোড হয়নি। দয়া করে কিছুক্ষণ অপেক্ষা করে আবার চেষ্টা করুন।' });
       return;
     }
 
     if (!senderNumber || !transactionId) {
-      setMessage({ type: 'error', text: 'Please fill in all required fields. (দয়া করে সব প্রয়োজনীয় তথ্য পূরণ করুন।)' });
+      setMessage({ type: 'error', text: 'দয়া করে সব প্রয়োজনীয় তথ্য পূরণ করুন।' });
       return;
     }
 
@@ -263,7 +303,7 @@ export function Dashboard() {
       if (isActivating) {
         console.warn('Activation submission timed out.');
         setIsActivating(false);
-        setMessage({ type: 'error', text: 'Submission timed out. Please check your internet and try again. (সাবমিশন টাইমআউট হয়েছে। দয়া করে ইন্টারনেট চেক করে আবার চেষ্টা করুন।)' });
+        setMessage({ type: 'error', text: 'সাবমিশন টাইমআউট হয়েছে। দয়া করে ইন্টারনেট চেক করে আবার চেষ্টা করুন।' });
       }
     }, 30000);
 
@@ -278,7 +318,7 @@ export function Dashboard() {
           console.log('Screenshot uploaded successfully:', screenshotUrl);
         } catch (storageErr) {
           console.error('Error uploading screenshot:', storageErr);
-          throw new Error('Failed to upload screenshot. Please check your internet connection and try again. (স্ক্রিনশট আপলোড করতে ব্যর্থ হয়েছে। দয়া করে ইন্টারনেট চেক করে আবার চেষ্টা করুন।)');
+          throw new Error('স্ক্রিনশট আপলোড করতে ব্যর্থ হয়েছে। দয়া করে ইন্টারনেট চেক করে আবার চেষ্টা করুন।');
         }
       }
 
@@ -320,7 +360,7 @@ export function Dashboard() {
       }
 
       clearTimeout(safetyTimeout);
-      setMessage({ type: 'success', text: 'Activation request submitted successfully! (অ্যাক্টিভেশন রিকোয়েস্ট সফলভাবে জমা দেওয়া হয়েছে!)' });
+      setMessage({ type: 'success', text: 'অ্যাক্টিভেশন রিকোয়েস্ট সফলভাবে জমা দেওয়া হয়েছে!' });
       setTransactionId('');
       setSenderNumber('');
       setScreenshot(null);
@@ -339,12 +379,12 @@ export function Dashboard() {
     } catch (error: any) {
       clearTimeout(safetyTimeout);
       console.error('Error submitting activation:', error);
-      let errorMsg = 'Failed to submit activation request. Please try again. (অ্যাক্টিভেশন রিকোয়েস্ট জমা দিতে ব্যর্থ হয়েছে। আবার চেষ্টা করুন।)';
+      let errorMsg = 'অ্যাক্টিভেশন রিকোয়েস্ট জমা দিতে ব্যর্থ হয়েছে। আবার চেষ্টা করুন।';
       
       try {
         const parsedError = JSON.parse(error.message);
         if (parsedError.error.includes('permission-denied')) {
-          errorMsg = 'Permission denied. Please ensure your payment details are correct and try again. (অনুমতি নেই। দয়া করে নিশ্চিত করুন যে আপনার পেমেন্ট ডিটেইলস সঠিক এবং আবার চেষ্টা করুন।)';
+          errorMsg = 'অনুমতি নেই। দয়া করে নিশ্চিত করুন যে আপনার পেমেন্ট ডিটেইলস সঠিক এবং আবার চেষ্টা করুন।';
         } else {
           errorMsg = parsedError.error;
         }
@@ -402,22 +442,116 @@ export function Dashboard() {
               Your User ID: {profile?.userId || 'N/A'}
             </p>
             <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">
-              Account Status: <span className={profile?.status === 'active' ? "text-green-500" : profile?.status === 'pending' ? "text-amber-500" : "text-rose-500"}>
-                {profile?.status === 'active' ? 'Active' : profile?.status === 'pending' ? 'Pending' : 'Inactive'}
+              অ্যাকাউন্ট স্ট্যাটাস: <span className={profile?.status === 'active' ? "text-green-500" : profile?.status === 'pending' ? "text-amber-500" : "text-rose-500"}>
+                {profile?.status === 'active' ? 'একটিভ' : profile?.status === 'pending' ? 'পেন্ডিং' : 'ইন-একটিভ'}
               </span>
             </p>
           </div>
         </div>
         
-        {(profile?.role === 'admin' || profile?.role === 'ceo') && (
+        <div className="flex items-center gap-3">
           <button 
-            onClick={() => navigate('/admin?tab=quicksetup')}
-            className="flex items-center gap-3 bg-blue-600 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-blue-600/20 hover:scale-[1.02] transition-all"
+            onClick={() => setShowNotifications(true)}
+            className="relative p-4 bg-pink-500/10 text-pink-500 rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-pink-500/5 hover:scale-[1.02] transition-all"
           >
-            <Zap className="w-5 h-5" />
-            Price
+            <Bell className="w-6 h-6" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 w-6 h-6 bg-rose-500 text-white text-[10px] flex items-center justify-center rounded-full border-2 border-white dark:border-[#1a1c2e]">
+                {unreadCount}
+              </span>
+            )}
           </button>
-        )}
+          {(profile?.role === 'admin' || profile?.role === 'ceo') && (
+            <button 
+              onClick={() => navigate('/admin?tab=quicksetup')}
+              className="flex items-center gap-3 bg-blue-600 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-blue-600/20 hover:scale-[1.02] transition-all"
+            >
+              <Zap className="w-5 h-5" />
+              Price
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Balance Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className={cn(
+          "rounded-[2rem] p-8 border flex items-center gap-6",
+          theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
+        )}>
+          <div className="w-16 h-16 bg-emerald-500 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
+            <WalletIcon className="w-8 h-8 text-white" />
+          </div>
+          <div>
+            <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">মোট ব্যালেন্স</p>
+            <h3 className="text-3xl font-black tracking-tight italic">BDT {profile?.balance || 0}</h3>
+          </div>
+        </div>
+
+        <div className={cn(
+          "rounded-[2rem] p-8 border flex items-center gap-6",
+          theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
+        )}>
+          <div className="w-16 h-16 bg-pink-500 rounded-2xl flex items-center justify-center shadow-lg shadow-pink-500/20">
+            <Users className="w-8 h-8 text-white" />
+          </div>
+          <div>
+            <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">রেফারেল ইনকাম</p>
+            <h3 className="text-3xl font-black tracking-tight italic">BDT {profile?.inviteEarnings || 0}</h3>
+          </div>
+        </div>
+
+        <div className={cn(
+          "rounded-[2rem] p-8 border flex items-center gap-6",
+          theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
+        )}>
+          <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-600/20">
+            <Facebook className="w-8 h-8 text-white" />
+          </div>
+          <div>
+            <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">ফেসবুক ইনকাম</p>
+            <h3 className="text-3xl font-black tracking-tight italic">BDT {profile?.facebookBalance || 0}</h3>
+          </div>
+        </div>
+
+        <div className={cn(
+          "rounded-[2rem] p-8 border flex items-center gap-6",
+          theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
+        )}>
+          <div className="w-16 h-16 bg-red-500 rounded-2xl flex items-center justify-center shadow-lg shadow-red-500/20">
+            <Mail className="w-8 h-8 text-white" />
+          </div>
+          <div>
+            <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">জিমেইল ইনকাম</p>
+            <h3 className="text-3xl font-black tracking-tight italic">BDT {profile?.gmailBalance || 0}</h3>
+          </div>
+        </div>
+
+        <div className={cn(
+          "rounded-[2rem] p-8 border flex items-center gap-6",
+          theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
+        )}>
+          <div className="w-16 h-16 bg-pink-600 rounded-2xl flex items-center justify-center shadow-lg shadow-pink-600/20">
+            <Instagram className="w-8 h-8 text-white" />
+          </div>
+          <div>
+            <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">ইনস্টাগ্রাম ইনকাম</p>
+            <h3 className="text-3xl font-black tracking-tight italic">BDT {profile?.instagramBalance || 0}</h3>
+          </div>
+        </div>
+
+        <div className={cn(
+          "rounded-[2rem] p-8 border flex items-center gap-6",
+          theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
+        )}>
+          <div className="w-16 h-16 bg-sky-500 rounded-2xl flex items-center justify-center shadow-lg shadow-sky-500/20">
+            <Send className="w-8 h-8 text-white" />
+          </div>
+          <div>
+            <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">টেলিগ্রাম ইনকাম</p>
+            <h3 className="text-3xl font-black tracking-tight italic">BDT {profile?.telegramBalance || 0}</h3>
+          </div>
+        </div>
       </div>
 
       {/* 24h Pending Alert */}
@@ -431,8 +565,8 @@ export function Dashboard() {
               <Clock className="w-6 h-6 text-white" />
             </div>
             <div>
-              <p className="font-black uppercase tracking-tight text-rose-500">Pending Request Alert</p>
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">If something is not approved within 24 hours, contact us.</p>
+              <p className="font-black uppercase tracking-tight text-rose-500">পেন্ডিং রিকোয়েস্ট অ্যালার্ট</p>
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">যদি ২৪ ঘণ্টার মধ্যে কোনো কিছু অ্যাপ্রুভ না হয়, তবে আমাদের সাথে যোগাযোগ করুন।</p>
             </div>
           </div>
           <a 
@@ -441,7 +575,7 @@ export function Dashboard() {
             rel="noopener noreferrer"
             className="bg-rose-500 text-white px-8 py-3 rounded-xl font-black uppercase tracking-widest text-xs shadow-lg shadow-rose-500/20 hover:scale-[1.02] transition-all"
           >
-            Contact Support
+            সাপোর্টে যোগাযোগ করুন
           </a>
         </div>
       )}
@@ -486,7 +620,7 @@ export function Dashboard() {
                 : "bg-blue-600 text-white shadow-blue-600/20 hover:scale-[1.02]"
             )}
           >
-            {profile?.status === 'pending' ? 'Pending Approval' : 'Click here'}
+            {profile?.status === 'pending' ? 'অনুমোদনের অপেক্ষায়' : 'এখানে ক্লিক করুন'}
           </button>
         </div>
       )}
@@ -509,6 +643,24 @@ export function Dashboard() {
           theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
         )}>
           <h3 className="text-2xl font-black tracking-tight uppercase">Your Refer Link</h3>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div className={cn(
+              "p-4 rounded-2xl border transition-all",
+              theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
+            )}>
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Total Referrals</p>
+              <p className="text-2xl font-black text-pink-500 tracking-tight italic">{profile?.referrals || 0}</p>
+            </div>
+            <div className={cn(
+              "p-4 rounded-2xl border transition-all",
+              theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
+            )}>
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Referral Earnings</p>
+              <p className="text-2xl font-black text-pink-500 tracking-tight italic">BDT {profile?.inviteEarnings || 0}</p>
+            </div>
+          </div>
+
           <div className="relative">
             <input 
               type="text" 
@@ -643,8 +795,8 @@ export function Dashboard() {
             <div className="p-8 space-y-6">
               <div className="flex justify-between items-start">
                 <div>
-                  <h3 className="text-2xl font-black tracking-tight italic uppercase">Activate Account</h3>
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">Pay activation fee to start working</p>
+                  <h3 className="text-2xl font-black tracking-tight italic uppercase">অ্যাকাউন্ট একটিভ করুন</h3>
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">কাজ শুরু করতে অ্যাক্টিভেশন ফি প্রদান করুন</p>
                 </div>
                 <button onClick={() => setShowActivationModal(false)} className="p-2 hover:bg-slate-500/10 rounded-full transition-colors">
                   <X className="w-6 h-6" />
@@ -656,12 +808,12 @@ export function Dashboard() {
                 theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
               )}>
                 <div className="flex items-center justify-between">
-                  <p className="text-sm font-black uppercase tracking-widest text-pink-500">Activation Fee: BDT {paymentSettings?.activationFee || 20}</p>
+                  <p className="text-sm font-black uppercase tracking-widest text-pink-500">অ্যাক্টিভেশন ফি: BDT {paymentSettings?.activationFee || 20}</p>
                   <button 
                     onClick={() => {
                       const fee = (paymentSettings?.activationFee || 20).toString();
                       navigator.clipboard.writeText(fee);
-                      setMessage({ type: 'success', text: 'Amount copied!' });
+                      setMessage({ type: 'success', text: 'পরিমাণ কপি করা হয়েছে!' });
                     }}
                     className="p-2 bg-pink-500/10 text-pink-500 rounded-lg hover:bg-pink-500 hover:text-white transition-all"
                     title="Copy Amount"
@@ -669,7 +821,7 @@ export function Dashboard() {
                     <Copy className="w-3 h-3" />
                   </button>
                 </div>
-                <p className="text-xs font-bold text-slate-500">Please send the exact amount to one of our numbers below.</p>
+                <p className="text-xs font-bold text-slate-500">দয়া করে নিচের যেকোনো একটি নম্বরে সঠিক পরিমাণ টাকা পাঠান।</p>
               </div>
 
               <div className="grid grid-cols-3 gap-3">
@@ -693,7 +845,7 @@ export function Dashboard() {
                 "p-4 rounded-2xl border text-center relative group",
                 theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
               )}>
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Send Money to</p>
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">টাকা পাঠান এই নম্বরে</p>
                 <div className="flex items-center justify-center gap-3 mt-1">
                   <p className="text-xl font-black tracking-widest">
                     {activationMethod === 'bkash' ? paymentSettings?.bKash :
@@ -707,7 +859,7 @@ export function Dashboard() {
                                  paymentSettings?.Rocket;
                       if (num) {
                         navigator.clipboard.writeText(num);
-                        setMessage({ type: 'success', text: 'Number copied!' });
+                        setMessage({ type: 'success', text: 'নম্বর কপি করা হয়েছে!' });
                       }
                     }}
                     className="p-2 bg-pink-500/10 text-pink-500 rounded-lg hover:bg-pink-500 hover:text-white transition-all"
@@ -720,12 +872,12 @@ export function Dashboard() {
 
               <form onSubmit={handleActivationSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Sender Mobile Number</label>
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">প্রেরক মোবাইল নম্বর</label>
                   <input 
                     type="text"
                     value={senderNumber}
                     onChange={(e) => setSenderNumber(e.target.value)}
-                    placeholder="Enter your mobile number"
+                    placeholder="আপনার মোবাইল নম্বর লিখুন"
                     className={cn(
                       "w-full px-6 py-4 rounded-2xl border focus:ring-2 focus:ring-pink-500 transition-all text-sm font-bold",
                       theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
@@ -735,12 +887,12 @@ export function Dashboard() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Transaction ID</label>
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">ট্রানজেকশন আইডি</label>
                   <input 
                     type="text"
                     value={transactionId}
                     onChange={(e) => setTransactionId(e.target.value)}
-                    placeholder="Enter TRX ID"
+                    placeholder="TRX ID লিখুন"
                     className={cn(
                       "w-full px-6 py-4 rounded-2xl border focus:ring-2 focus:ring-pink-500 transition-all text-sm font-bold",
                       theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
@@ -750,14 +902,14 @@ export function Dashboard() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Payment Screenshot</label>
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">পেমেন্ট স্ক্রিনশট</label>
                   <label className={cn(
                     "flex items-center justify-center gap-3 px-6 py-4 rounded-2xl border-2 border-dashed cursor-pointer transition-all",
                     theme === 'dark' ? "bg-[#0a0b14] border-[#303456] hover:border-pink-500" : "bg-slate-50 border-slate-200 hover:border-pink-500"
                   )}>
                     <Upload className="w-5 h-5 text-pink-500" />
                     <span className="text-xs font-bold text-slate-500 truncate">
-                      {screenshot ? screenshot.name : 'Upload Screenshot'}
+                      {screenshot ? screenshot.name : 'স্ক্রিনশট আপলোড করুন'}
                     </span>
                     <input 
                       type="file" 
@@ -773,7 +925,7 @@ export function Dashboard() {
                   disabled={isActivating || !transactionId}
                   className="w-full bg-pink-500 text-white py-4 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-pink-500/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50"
                 >
-                  {isActivating ? 'Submitting...' : 'Submit Activation'}
+                  {isActivating ? 'জমা দেওয়া হচ্ছে...' : 'অ্যাক্টিভেশন জমা দিন'}
                 </button>
               </form>
             </div>
@@ -791,6 +943,90 @@ export function Dashboard() {
           <button onClick={() => setMessage(null)} className="ml-2 opacity-50 hover:opacity-100">
             <X className="w-4 h-4" />
           </button>
+        </div>
+      )}
+      {/* Notifications Modal */}
+      {showNotifications && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowNotifications(false)} />
+          <div className={cn(
+            "relative w-full max-w-xl rounded-[2.5rem] p-8 border shadow-2xl animate-in zoom-in-95 duration-200",
+            theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
+          )}>
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-pink-500/10 rounded-2xl flex items-center justify-center">
+                  <Bell className="w-6 h-6 text-pink-500" />
+                </div>
+                <div>
+                  <h3 className="text-2xl font-black tracking-tight italic uppercase">Notifications</h3>
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Stay updated with your account activity</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowNotifications(false)}
+                className="p-2 hover:bg-slate-500/10 rounded-xl transition-colors"
+              >
+                <X className="w-6 h-6 text-slate-500" />
+              </button>
+            </div>
+
+            <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+              {notifications.length === 0 ? (
+                <div className="text-center py-12 space-y-4">
+                  <div className="w-16 h-16 bg-slate-500/5 rounded-full flex items-center justify-center mx-auto">
+                    <Bell className="w-8 h-8 text-slate-300" />
+                  </div>
+                  <p className="text-sm font-black uppercase tracking-widest text-slate-400 italic">No notifications yet</p>
+                </div>
+              ) : (
+                <>
+                  <div className="flex justify-end mb-2">
+                    <button 
+                      onClick={markAllAsRead}
+                      className="text-[10px] font-black uppercase tracking-widest text-pink-500 hover:underline"
+                    >
+                      Mark all as read
+                    </button>
+                  </div>
+                  {notifications.map(notif => (
+                    <div 
+                      key={notif.id}
+                      onClick={() => markAsRead(notif.id)}
+                      className={cn(
+                        "p-6 rounded-3xl border transition-all cursor-pointer relative overflow-hidden",
+                        notif.read 
+                          ? theme === 'dark' ? "bg-slate-500/5 border-slate-500/10" : "bg-slate-50 border-slate-100"
+                          : theme === 'dark' ? "bg-pink-500/5 border-pink-500/20 shadow-lg shadow-pink-500/5" : "bg-pink-50 border-pink-100 shadow-lg shadow-pink-500/5"
+                      )}
+                    >
+                      {!notif.read && (
+                        <div className="absolute top-0 left-0 w-1 h-full bg-pink-500" />
+                      )}
+                      <div className="flex justify-between items-start gap-4">
+                        <div className="space-y-1">
+                          <h4 className={cn(
+                            "font-black text-lg tracking-tight italic",
+                            notif.read ? "text-slate-500" : "text-pink-500"
+                          )}>{notif.title}</h4>
+                          <p className={cn(
+                            "text-sm font-medium leading-relaxed",
+                            theme === 'dark' ? "text-slate-400" : "text-slate-600"
+                          )}>{notif.message}</p>
+                          <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest mt-2">
+                            {new Date(notif.createdAt).toLocaleString()}
+                          </div>
+                        </div>
+                        {!notif.read && (
+                          <div className="w-2 h-2 bg-pink-500 rounded-full shrink-0 mt-2 animate-pulse" />
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

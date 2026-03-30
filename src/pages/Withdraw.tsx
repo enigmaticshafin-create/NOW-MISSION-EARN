@@ -46,26 +46,26 @@ export default function Withdraw() {
     if (!user || !profile) return;
 
     const withdrawAmount = parseFloat(amount);
-    const minWithdraw = withdrawSettings.minWithdraw || 500;
-    const maxWithdraw = withdrawSettings.maxWithdraw || 10000;
+    const minWithdraw = withdrawSettings.minWithdraw || 110;
+    const maxWithdraw = withdrawSettings.maxWithdraw || 120000;
 
     if (!amount || !paymentNumber) {
-      alert('Please fill all fields.');
+      alert('অনুগ্রহ করে সব ঘর পূরণ করুন।');
       return;
     }
 
     if (withdrawAmount < minWithdraw) {
-      alert(`Minimum withdrawal amount is BDT ${minWithdraw}`);
+      alert(`সর্বনিম্ন উইথড্র পরিমাণ হলো BDT ${minWithdraw}`);
       return;
     }
 
     if (withdrawAmount > maxWithdraw) {
-      alert(`Maximum withdrawal amount is BDT ${maxWithdraw}`);
+      alert(`সর্বোচ্চ উইথড্র পরিমাণ হলো BDT ${maxWithdraw}`);
       return;
     }
 
     if (withdrawAmount > (profile.balance || 0)) {
-      alert('Insufficient balance.');
+      alert('আপনার ব্যালেন্স পর্যাপ্ত নয়।');
       return;
     }
 
@@ -95,11 +95,11 @@ export default function Withdraw() {
 
       await batch.commit();
 
-      alert('Withdrawal request submitted successfully! Admin will review it soon.');
+      alert('উইথড্র রিকোয়েস্ট সফলভাবে জমা দেওয়া হয়েছে! এডমিন শীঘ্রই এটি পর্যালোচনা করবেন।');
       navigate('/');
     } catch (error) {
       console.error('Error submitting withdrawal:', error);
-      alert('Failed to submit withdrawal request. Please try again.');
+      alert('উইথড্র রিকোয়েস্ট জমা দিতে ব্যর্থ হয়েছে। আবার চেষ্টা করুন।');
     } finally {
       setIsSubmitting(false);
     }
@@ -112,8 +112,8 @@ export default function Withdraw() {
           <ArrowUpCircle className="w-6 h-6 text-white" />
         </div>
         <div>
-          <h2 className="text-2xl font-black tracking-tight italic uppercase">Withdraw Funds</h2>
-          <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Cash out your earnings</p>
+          <h2 className="text-2xl font-black tracking-tight italic uppercase">টাকা উত্তোলন</h2>
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">আপনার উপার্জন করা টাকা তুলুন</p>
         </div>
       </div>
 
@@ -124,7 +124,7 @@ export default function Withdraw() {
       )}>
         <div className="relative z-10 flex items-center justify-between">
           <div className="space-y-1">
-            <p className="text-xs font-black text-emerald-600 uppercase tracking-widest">Available Balance</p>
+            <p className="text-xs font-black text-emerald-600 uppercase tracking-widest">বর্তমান ব্যালেন্স</p>
             <h3 className="text-4xl font-black tracking-tight text-emerald-600 italic">BDT {(profile?.balance || 0).toFixed(2)}</h3>
           </div>
           <div className="w-16 h-16 bg-emerald-600 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-600/20">
@@ -140,7 +140,7 @@ export default function Withdraw() {
       )}>
         {/* Step 1: Select Method */}
         <div className="space-y-4">
-          <label className="text-xs font-black text-slate-500 uppercase tracking-widest px-2">Select Withdrawal Method</label>
+          <label className="text-xs font-black text-slate-500 uppercase tracking-widest px-2">উত্তোলন পদ্ধতি নির্বাচন করুন</label>
           <div className="grid grid-cols-3 gap-4">
             {[
               { id: 'bkash', name: 'bKash', color: 'bg-pink-500' },
@@ -170,7 +170,7 @@ export default function Withdraw() {
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <label className="text-xs font-black text-slate-500 uppercase tracking-widest px-2">Amount (BDT)</label>
+              <label className="text-xs font-black text-slate-500 uppercase tracking-widest px-2">পরিমাণ (BDT)</label>
               <input
                 type="number"
                 value={amount}
@@ -184,12 +184,12 @@ export default function Withdraw() {
               <div className="flex items-center gap-1 px-2">
                 <Info className="w-3 h-3 text-slate-500" />
                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">
-                  Min: BDT {withdrawSettings.minWithdraw || 500} • Max: BDT {withdrawSettings.maxWithdraw || 10000}
+                  সর্বনিম্ন: BDT {withdrawSettings.minWithdraw || 110} • সর্বোচ্চ: BDT {withdrawSettings.maxWithdraw || 120000}
                 </p>
               </div>
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-black text-slate-500 uppercase tracking-widest px-2">Your Number</label>
+              <label className="text-xs font-black text-slate-500 uppercase tracking-widest px-2">আপনার নাম্বার</label>
               <input
                 type="text"
                 value={paymentNumber}
@@ -218,7 +218,7 @@ export default function Withdraw() {
             {isSubmitting ? (
               <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
             ) : (
-              <>Submit Withdrawal <ChevronRight className="w-5 h-5" /></>
+              <>উইথড্র রিকোয়েস্ট পাঠান <ChevronRight className="w-5 h-5" /></>
             )}
           </button>
         </form>

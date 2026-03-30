@@ -93,13 +93,19 @@ export default function SellPage({ type }: SellPageProps) {
     );
   }
 
+  const adminPassword = settings ? (
+    type === 'Gmail' ? settings.gmailPassword :
+    type === 'Facebook' ? settings.facebookPassword :
+    type === 'Instagram' ? settings.instagramPassword :
+    settings.telegramPassword
+  ) : '';
+
   const generatePassword = () => {
-    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+";
-    let password = "";
-    for (let i = 0; i < 12; i++) {
-      password += chars.charAt(Math.floor(Math.random() * chars.length));
+    if (adminPassword) {
+      setForm({ ...form, password: adminPassword });
+    } else {
+      alert('Admin has not set a default password for this platform. (অ্যাডমিন এই প্ল্যাটফর্মের জন্য কোনো ডিফল্ট পাসওয়ার্ড সেট করেননি।)');
     }
-    setForm({ ...form, password });
   };
 
   const copyToClipboard = (text: string) => {
@@ -232,7 +238,7 @@ export default function SellPage({ type }: SellPageProps) {
             className="flex items-center gap-2 px-4 py-2 bg-pink-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-pink-500/20 hover:scale-105 transition-all"
           >
             <RefreshCw className="w-3 h-3" />
-            Set Password
+            SET PASSWORD
           </button>
         </div>
         {form.password && (
@@ -342,6 +348,7 @@ export default function SellPage({ type }: SellPageProps) {
                       theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
                     )}
                     required
+                    readOnly={!!adminPassword}
                   />
                 </div>
               </div>
@@ -391,6 +398,7 @@ export default function SellPage({ type }: SellPageProps) {
                     theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
                   )}
                   required
+                  readOnly={!!adminPassword}
                 />
               </div>
             </>
