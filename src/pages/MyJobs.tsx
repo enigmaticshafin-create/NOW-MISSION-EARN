@@ -156,7 +156,7 @@ export default function MyJobs() {
       let proofUrl = '';
       if (proofFile) {
         console.log('Uploading proof file...');
-        const storageRef = ref(storage, `submissions/${user.uid}/${Date.now()}_${proofFile.name}`);
+        const storageRef = ref(storage, `proofs/${user.uid}/${Date.now()}_${proofFile.name}`);
         await uploadBytes(storageRef, proofFile);
         proofUrl = await getDownloadURL(storageRef);
         console.log('File uploaded, URL:', proofUrl);

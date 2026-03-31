@@ -921,12 +921,22 @@ export function AdminPanel() {
             <h2 className="text-4xl font-black tracking-tighter italic uppercase">Admin <span className="text-pink-500">Panel</span></h2>
             <p className="text-slate-500 font-black uppercase tracking-[0.2em] text-[10px]">Command Center • {new Date().toLocaleDateString()}</p>
             {profile?.role === 'ceo' && (
-              <button 
-                onClick={handleMigrateUserIds}
-                className="mt-2 text-[10px] bg-pink-500/10 text-pink-500 px-3 py-1 rounded-full font-black tracking-widest hover:bg-pink-500 hover:text-white transition-all"
-              >
-                Migrate All IDs to 8-Digits
-              </button>
+              <div className="flex flex-wrap gap-2 mt-2">
+                <button 
+                  onClick={handleMigrateUserIds}
+                  className="text-[10px] bg-pink-500/10 text-pink-500 px-3 py-1 rounded-full font-black tracking-widest hover:bg-pink-500 hover:text-white transition-all flex items-center gap-1"
+                >
+                  <Zap className="w-3 h-3" />
+                  Migrate All IDs
+                </button>
+                <button 
+                  onClick={handleDeactivateAll}
+                  className="text-[10px] bg-rose-500/10 text-rose-500 px-3 py-1 rounded-full font-black tracking-widest hover:bg-rose-500 hover:text-white transition-all flex items-center gap-1"
+                >
+                  <ShieldAlert className="w-3 h-3" />
+                  Deactivate All Users
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -2349,24 +2359,21 @@ export function AdminPanel() {
                         <div className="p-6 rounded-3xl bg-rose-500/5 border border-rose-500/20 space-y-4">
                           <div className="flex items-center gap-4">
                             <div className="w-12 h-12 bg-rose-500/10 rounded-2xl flex items-center justify-center">
-                              <ShieldAlert className="w-6 h-6 text-rose-500" />
+                              <Zap className="w-6 h-6 text-rose-500" />
                             </div>
                             <div>
-                              <h5 className="text-sm font-black uppercase tracking-tight italic">Deactivate All Users</h5>
-                              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Reset all account statuses to inactive</p>
+                              <h5 className="text-sm font-black uppercase tracking-tight italic">Migrate User IDs</h5>
+                              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Convert all IDs to 8-digit format</p>
                             </div>
                           </div>
-                          <p className="text-xs font-medium text-slate-500">
-                            This will set the status of all users (except CEO) to 'inactive'. Users will need to pay the activation fee again to become active.
-                          </p>
                           <button 
                             type="button"
-                            onClick={handleDeactivateAll}
+                            onClick={handleMigrateUserIds}
                             disabled={isSubmitting}
                             className="w-full bg-rose-500 text-white font-black py-4 rounded-2xl shadow-lg shadow-rose-500/20 uppercase tracking-widest text-xs flex items-center justify-center gap-2 hover:bg-rose-600 transition-colors disabled:opacity-50"
                           >
-                            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldAlert className="w-4 h-4" />}
-                            Deactivate All Users
+                            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                            Migrate All IDs
                           </button>
                         </div>
                       </div>

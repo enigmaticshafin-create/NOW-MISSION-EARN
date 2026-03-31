@@ -98,7 +98,6 @@ export function Dashboard() {
   const [activationMethod, setActivationMethod] = useState<'bkash' | 'nagad' | 'rocket'>('bkash');
   const [transactionId, setTransactionId] = useState('');
   const [senderNumber, setSenderNumber] = useState('');
-  const [screenshot, setScreenshot] = useState<File | null>(null);
   const [isActivating, setIsActivating] = useState(false);
   const isActivatingRef = useRef(false);
 
@@ -132,6 +131,8 @@ export function Dashboard() {
       } else {
         setLatestActivationRequest(null);
       }
+    }, (error) => {
+      console.error("Error listening to activation requests:", error);
     });
 
     return () => unsubscribe();
@@ -306,7 +307,7 @@ export function Dashboard() {
     const baseUrl = window.location.origin;
     const link = `${baseUrl}/register?referBy=${profile?.referralCode ? profile.referralCode : (profile?.userId ? profile.userId : '')}`;
     navigator.clipboard.writeText(link);
-    alert('রেফারেল লিঙ্ক ক্লিপবোর্ডে কপি করা হয়েছে!');
+    setMessage({ type: 'success', text: 'রেফারেল লিঙ্ক ক্লিপবোর্ডে কপি করা হয়েছে!' });
   };
 
   const handleActivationSubmit = async (e: React.FormEvent) => {
@@ -337,25 +338,11 @@ export function Dashboard() {
     }, 30000);
 
     try {
-      let screenshotUrl = '';
-      if (screenshot) {
-        console.log('Uploading screenshot...');
-        try {
-          const storageRef = ref(storage, `activations/${user.uid}/${Date.now()}_${screenshot.name}`);
-          const uploadResult = await uploadBytes(storageRef, screenshot);
-          screenshotUrl = await getDownloadURL(uploadResult.ref);
-          console.log('Screenshot uploaded successfully:', screenshotUrl);
-        } catch (storageErr) {
-          console.error('Error uploading screenshot:', storageErr);
-          throw new Error('স্ক্রিনশট আপলোড করতে ব্যর্থ হয়েছে। দয়া করে ইন্টারনেট চেক করে আবার চেষ্টা করুন।');
-        }
-      }
-
       const activationData = {
         userId: user.uid,
         userName: profile.userName || 'Unknown',
         userSequentialId: profile.userId || 'Unknown',
-        userEmail: profile.email || 'Unknown',
+        userEmail: profile.email || user.email || 'Unknown',
         method: activationMethod === 'bkash' ? 'bKash' : activationMethod === 'nagad' ? 'Nagad' : 'Rocket',
         senderNumber,
         paymentNumber: activationMethod === 'bkash' ? paymentSettings.bKash :
@@ -363,7 +350,7 @@ export function Dashboard() {
                        paymentSettings.Rocket,
         amount: paymentSettings.activationFee || 20,
         transactionId,
-        screenshot: screenshotUrl,
+        screenshot: '',
         status: 'pending',
         submittedAt: new Date().toISOString()
       };
@@ -405,7 +392,6 @@ export function Dashboard() {
       setMessage({ type: 'success', text: 'অ্যাক্টিভেশন রিকোয়েস্ট সফলভাবে জমা দেওয়া হয়েছে!' });
       setTransactionId('');
       setSenderNumber('');
-      setScreenshot(null);
       
       // Close modal after a short delay
       setTimeout(() => {
@@ -435,8 +421,6 @@ export function Dashboard() {
       }
       
       setMessage({ type: 'error', text: errorMsg });
-      // Also show alert for visibility
-      window.alert(errorMsg);
     } finally {
       setIsActivating(false);
       console.log('Activation submission process finished.');
@@ -955,25 +939,6 @@ export function Dashboard() {
                     )}
                     required
                   />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">পেমেন্ট স্ক্রিনশট</label>
-                  <label className={cn(
-                    "flex items-center justify-center gap-3 px-6 py-4 rounded-2xl border-2 border-dashed cursor-pointer transition-all",
-                    theme === 'dark' ? "bg-[#0a0b14] border-[#303456] hover:border-pink-500" : "bg-slate-50 border-slate-200 hover:border-pink-500"
-                  )}>
-                    <Upload className="w-5 h-5 text-pink-500" />
-                    <span className="text-xs font-bold text-slate-500 truncate">
-                      {screenshot ? screenshot.name : 'স্ক্রিনশট আপলোড করুন'}
-                    </span>
-                    <input 
-                      type="file" 
-                      className="hidden" 
-                      accept="image/*" 
-                      onChange={(e) => setScreenshot(e.target.files?.[0] || null)} 
-                    />
-                  </label>
                 </div>
 
                 <button

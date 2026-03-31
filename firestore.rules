@@ -74,20 +74,20 @@ service cloud.firestore {
     }
 
     function isValidUser(data) {
-      return data.uid is string && data.uid.size() > 0 &&
+      return (data.uid is string || data.userId is string) &&
              data.email is string && isValidEmail(data.email) &&
              data.balance is number && data.balance >= 0 &&
              data.role in ['admin', 'user', 'moderator', 'ceo'] &&
              (data.role != 'ceo' || data.email == 'enigmaticshafin@gmail.com') &&
              data.status in ['active', 'inactive', 'pending'] &&
-             data.referralCode is string && data.referralCode.size() > 0 &&
+             (!('referralCode' in data) || (data.referralCode is string && data.referralCode.size() > 0)) &&
              (!('referredBy' in data) || data.referredBy is string) &&
-             isValidDateString(data.createdAt);
+             (!('createdAt' in data) || isValidDateString(data.createdAt));
     }
 
     function isValidMission(data) {
       return data.title is string && data.title.size() > 0 && data.title.size() < 100 &&
-             data.description is string && data.description.size() > 0 && data.description.size() < 2000 &&
+             data.description is string && data.description.size() > 0 && data.description.size() < 5000 &&
              data.reward is number && data.reward >= 0 &&
              data.status in ['active', 'inactive'] &&
              isValidDateString(data.createdAt);
@@ -101,7 +101,7 @@ service cloud.firestore {
              (!('missionTitle' in data) || (data.missionTitle is string && data.missionTitle.size() < 200)) &&
              (!('reward' in data) || (data.reward is number && data.reward >= 0)) &&
              data.status in ['pending', 'approved', 'rejected'] &&
-             data.proof is string && data.proof.size() > 0 && data.proof.size() < 2000 &&
+             data.proof is string && data.proof.size() > 0 && data.proof.size() < 5000 &&
              isValidDateString(data.submittedAt);
     }
 
@@ -109,21 +109,21 @@ service cloud.firestore {
       return data.userId is string && data.userId == request.auth.uid &&
              data.amount is number && data.amount > 0 &&
              data.status in ['pending', 'completed', 'rejected'] &&
-             data.method is string && data.method.size() > 0 && data.method.size() < 500 &&
+             data.method is string && data.method.size() > 0 && data.method.size() < 1000 &&
              isValidDateString(data.submittedAt);
     }
 
     function isValidActivationRequest(data) {
       return data.userId is string && data.userId == request.auth.uid &&
-             data.userName is string && data.userName.size() > 0 &&
-             data.userSequentialId is string && data.userSequentialId.size() > 0 &&
-             data.userEmail is string && isValidEmail(data.userEmail) &&
+             (!('userName' in data) || (data.userName is string)) &&
+             (!('userSequentialId' in data) || (data.userSequentialId is string)) &&
+             (!('userEmail' in data) || (data.userEmail is string)) &&
              data.method in ['bKash', 'Nagad', 'Rocket'] &&
-             data.senderNumber is string && data.senderNumber.size() > 0 && data.senderNumber.size() < 20 &&
-             data.paymentNumber is string && data.paymentNumber.size() > 0 && data.paymentNumber.size() < 20 &&
+             data.senderNumber is string && data.senderNumber.size() > 0 && data.senderNumber.size() < 30 &&
+             data.paymentNumber is string && data.paymentNumber.size() > 0 && data.paymentNumber.size() < 30 &&
              data.amount is number && data.amount >= 0 &&
-             data.transactionId is string && data.transactionId.size() > 0 && data.transactionId.size() < 50 &&
-             (!('screenshot' in data) || (data.screenshot is string && data.screenshot.size() < 1000)) &&
+             data.transactionId is string && data.transactionId.size() > 0 && data.transactionId.size() < 100 &&
+             (!('screenshot' in data) || (data.screenshot is string && data.screenshot.size() < 2000)) &&
              data.status in ['pending', 'approved', 'rejected'] &&
              isValidDateString(data.submittedAt);
     }
@@ -144,7 +144,13 @@ service cloud.firestore {
       allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data);
       allow update: if (isCeo() && isValidUser(request.resource.data)) || 
                     (isAdmin() && resource.data.role != 'ceo' && request.resource.data.role == resource.data.role) ||
-                    (isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.role == resource.data.role && request.resource.data.balance == resource.data.balance);
+                    (isOwner(userId) && isValidUser(request.resource.data) && 
+                     request.resource.data.role == resource.data.role && 
+                     request.resource.data.balance == resource.data.balance &&
+                     request.resource.data.userId == resource.data.userId &&
+                     request.resource.data.referralCode == resource.data.referralCode &&
+                     (request.resource.data.status == resource.data.status || 
+                      (resource.data.status == 'inactive' && request.resource.data.status == 'pending')));
     }
 
     match /referral_lookup/{code} {

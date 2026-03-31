@@ -207,16 +207,6 @@ export function Register() {
               >
                 {loading ? "Checking..." : "Verify Referrer"}
               </button>
-              <button 
-                onClick={() => {
-                  setReferBy('');
-                  setStep(2);
-                }}
-                disabled={loading}
-                className="w-full bg-transparent text-slate-500 py-2 rounded-xl font-bold uppercase tracking-widest text-xs hover:text-pink-500 transition-all"
-              >
-                Skip Referrer
-              </button>
             </div>
           </div>
         )}
