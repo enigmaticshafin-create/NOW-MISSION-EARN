@@ -83,6 +83,7 @@ export default function MyJobs() {
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = useRef(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   // Sync ref with state
   useEffect(() => {
@@ -148,7 +149,7 @@ export default function MyJobs() {
       if (isSubmittingRef.current) {
         setIsSubmitting(false);
         console.error('Mission submission timed out');
-        alert('Submission timed out. Please check your connection and try again.');
+        setMessage({ type: 'error', text: 'সাবমিশন টাইমআউট হয়েছে। দয়া করে আপনার কানেকশন চেক করুন এবং আবার চেষ্টা করুন।' });
       }
     }, 15000);
 
@@ -180,12 +181,12 @@ export default function MyJobs() {
       setSelectedMission(null);
       setProof('');
       setProofFile(null);
-      alert('Mission submitted successfully!');
+      setMessage({ type: 'success', text: 'মিশন সফলভাবে জমা দেওয়া হয়েছে!' });
     } catch (error) {
       clearTimeout(timeoutId);
       console.error('Error submitting mission:', error);
       handleFirestoreError(error, OperationType.CREATE, 'missionSubmissions');
-      alert('Failed to submit mission. Please try again.');
+      setMessage({ type: 'error', text: 'মিশন জমা দিতে ব্যর্থ হয়েছে। আবার চেষ্টা করুন।' });
     } finally {
       setIsSubmitting(false);
     }
@@ -399,6 +400,19 @@ export default function MyJobs() {
               </form>
             </div>
           </div>
+        </div>
+      )}
+      {/* Toast Message */}
+      {message && (
+        <div className={cn(
+          "fixed bottom-20 left-1/2 -translate-x-1/2 px-6 py-3 rounded-2xl shadow-lg flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 z-[100]",
+          message.type === 'success' ? "bg-emerald-600 text-white" : "bg-red-600 text-white"
+        )}>
+          {message.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+          <span className="font-medium">{message.text}</span>
+          <button onClick={() => setMessage(null)} className="ml-2 opacity-50 hover:opacity-100">
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
     </div>

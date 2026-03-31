@@ -312,19 +312,37 @@ export function Dashboard() {
 
   const handleActivationSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !profile || isActivating) return;
+    
+    if (!user) {
+      setMessage({ type: 'error', text: 'দয়া করে লগইন করুন।' });
+      return;
+    }
+
+    if (!profile) {
+      setMessage({ type: 'error', text: 'আপনার প্রোফাইল লোড হচ্ছে, দয়া করে একটু অপেক্ষা করুন।' });
+      return;
+    }
+
+    if (isActivatingRef.current) {
+      console.log('Activation already in progress, ignoring click.');
+      return;
+    }
+
+    const trimmedSender = senderNumber.trim();
+    const trimmedTrx = transactionId.trim();
+
+    if (!trimmedSender || !trimmedTrx) {
+      setMessage({ type: 'error', text: 'দয়া করে সব প্রয়োজনীয় তথ্য পূরণ করুন।' });
+      return;
+    }
 
     if (!paymentSettings) {
       setMessage({ type: 'error', text: 'পেমেন্ট সেটিংস লোড হয়নি। দয়া করে কিছুক্ষণ অপেক্ষা করে আবার চেষ্টা করুন।' });
       return;
     }
 
-    if (!senderNumber || !transactionId) {
-      setMessage({ type: 'error', text: 'দয়া করে সব প্রয়োজনীয় তথ্য পূরণ করুন।' });
-      return;
-    }
-
     console.log('Starting activation submission...');
+    isActivatingRef.current = true;
     setIsActivating(true);
     setMessage(null);
 
@@ -332,6 +350,7 @@ export function Dashboard() {
     const safetyTimeout = setTimeout(() => {
       if (isActivatingRef.current) {
         console.warn('Activation submission timed out.');
+        isActivatingRef.current = false;
         setIsActivating(false);
         setMessage({ type: 'error', text: 'সাবমিশন টাইমআউট হয়েছে। দয়া করে ইন্টারনেট চেক করে আবার চেষ্টা করুন।' });
       }
@@ -344,12 +363,12 @@ export function Dashboard() {
         userSequentialId: profile.userId || 'Unknown',
         userEmail: profile.email || user.email || 'Unknown',
         method: activationMethod === 'bkash' ? 'bKash' : activationMethod === 'nagad' ? 'Nagad' : 'Rocket',
-        senderNumber,
+        senderNumber: trimmedSender,
         paymentNumber: activationMethod === 'bkash' ? paymentSettings.bKash :
                        activationMethod === 'nagad' ? paymentSettings.Nagad :
                        paymentSettings.Rocket,
         amount: paymentSettings.activationFee || 20,
-        transactionId,
+        transactionId: trimmedTrx,
         screenshot: '',
         status: 'pending',
         submittedAt: new Date().toISOString()
@@ -360,7 +379,7 @@ export function Dashboard() {
         await runTransaction(db, async (transaction) => {
           const activationRef = doc(collection(db, 'activationRequests'));
           const userRef = doc(db, 'users', user.uid);
-          const usedTxRef = doc(db, 'usedTransactionIds', transactionId);
+          const usedTxRef = doc(db, 'usedTransactionIds', trimmedTrx);
           
           // Check if transaction ID is already used in the transaction
           const usedTxSnap = await transaction.get(usedTxRef);
@@ -375,7 +394,7 @@ export function Dashboard() {
           transaction.set(usedTxRef, {
             usedAt: new Date().toISOString(),
             userId: user.uid,
-            userName: profile.userName,
+            userName: profile.userName || 'Unknown',
             type: 'activation'
           });
         });
@@ -399,7 +418,7 @@ export function Dashboard() {
       }, 2000);
       
       // If user is admin/ceo, they might want to go to admin panel to approve
-      if (profile.role === 'admin' || profile.role === 'ceo') {
+      if (profile && (profile.role === 'admin' || profile.role === 'ceo')) {
         setTimeout(() => {
           navigate('/admin?tab=activations');
         }, 3000);
@@ -423,6 +442,7 @@ export function Dashboard() {
       setMessage({ type: 'error', text: errorMsg });
     } finally {
       setIsActivating(false);
+      isActivatingRef.current = false;
       console.log('Activation submission process finished.');
     }
   };
@@ -644,7 +664,7 @@ export function Dashboard() {
                 theme === 'dark' ? "bg-rose-500/10 border-rose-500/20" : "bg-rose-50 border-rose-200"
               )}>
                 <p className="text-xs font-black uppercase tracking-widest text-rose-500">রিজেকশন কারণ:</p>
-                <p className="text-sm font-bold">{latestActivationRequest.rejectionReason || 'Invalid payment details or screenshot.'}</p>
+                <p className="text-sm font-bold">{latestActivationRequest.rejectionReason || 'Invalid payment details.'}</p>
                 <p className="text-[10px] font-medium text-slate-500 italic">দয়া করে সঠিক তথ্য দিয়ে আবার চেষ্টা করুন।</p>
               </div>
             )}

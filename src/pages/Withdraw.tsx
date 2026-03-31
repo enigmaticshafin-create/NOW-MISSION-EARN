@@ -29,6 +29,7 @@ export default function Withdraw() {
   const [paymentNumber, setPaymentNumber] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [withdrawSettings, setWithdrawSettings] = useState<any>({});
+  const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -50,22 +51,22 @@ export default function Withdraw() {
     const maxWithdraw = withdrawSettings.maxWithdraw || 120000;
 
     if (!amount || !paymentNumber) {
-      alert('অনুগ্রহ করে সব ঘর পূরণ করুন।');
+      setMessage({ type: 'error', text: 'অনুগ্রহ করে সব ঘর পূরণ করুন।' });
       return;
     }
 
     if (withdrawAmount < minWithdraw) {
-      alert(`সর্বনিম্ন উইথড্র পরিমাণ হলো BDT ${minWithdraw}`);
+      setMessage({ type: 'error', text: `সর্বনিম্ন উইথড্র পরিমাণ হলো BDT ${minWithdraw}` });
       return;
     }
 
     if (withdrawAmount > maxWithdraw) {
-      alert(`সর্বোচ্চ উইথড্র পরিমাণ হলো BDT ${maxWithdraw}`);
+      setMessage({ type: 'error', text: `সর্বোচ্চ উইথড্র পরিমাণ হলো BDT ${maxWithdraw}` });
       return;
     }
 
     if (withdrawAmount > (profile.balance || 0)) {
-      alert('আপনার ব্যালেন্স পর্যাপ্ত নয়।');
+      setMessage({ type: 'error', text: 'আপনার ব্যালেন্স পর্যাপ্ত নয়।' });
       return;
     }
 
@@ -94,11 +95,13 @@ export default function Withdraw() {
 
       await batch.commit();
 
-      alert('উইথড্র রিকোয়েস্ট সফলভাবে জমা দেওয়া হয়েছে! এডমিন শীঘ্রই এটি পর্যালোচনা করবেন।');
-      navigate('/');
+      setMessage({ type: 'success', text: 'উইথড্র রিকোয়েস্ট সফলভাবে জমা দেওয়া হয়েছে! এডমিন শীঘ্রই এটি পর্যালোচনা করবেন।' });
+      setTimeout(() => {
+        navigate('/');
+      }, 2000);
     } catch (error) {
       console.error('Error submitting withdrawal:', error);
-      alert('উইথড্র রিকোয়েস্ট জমা দিতে ব্যর্থ হয়েছে। আবার চেষ্টা করুন।');
+      setMessage({ type: 'error', text: 'উইথড্র রিকোয়েস্ট জমা দিতে ব্যর্থ হয়েছে। আবার চেষ্টা করুন।' });
     } finally {
       setIsSubmitting(false);
     }
@@ -222,6 +225,19 @@ export default function Withdraw() {
           </button>
         </form>
       </div>
+      {/* Toast Message */}
+      {message && (
+        <div className={cn(
+          "fixed bottom-20 left-1/2 -translate-x-1/2 px-6 py-3 rounded-2xl shadow-lg flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 z-[100]",
+          message.type === 'success' ? "bg-emerald-600 text-white" : "bg-red-600 text-white"
+        )}>
+          {message.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+          <span className="font-medium">{message.text}</span>
+          <button onClick={() => setMessage(null)} className="ml-2 opacity-50 hover:opacity-100">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

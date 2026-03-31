@@ -104,13 +104,13 @@ export default function SellPage({ type }: SellPageProps) {
     if (adminPassword) {
       setForm({ ...form, password: adminPassword });
     } else {
-      alert('Admin has not set a default password for this platform. (অ্যাডমিন এই প্ল্যাটফর্মের জন্য কোনো ডিফল্ট পাসওয়ার্ড সেট করেননি।)');
+      setMessage({ type: 'error', text: 'অ্যাডমিন এই প্ল্যাটফর্মের জন্য কোনো ডিফল্ট পাসওয়ার্ড সেট করেননি।' });
     }
   };
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    alert('Copied to clipboard!');
+    setMessage({ type: 'success', text: 'ক্লিপবোর্ডে কপি করা হয়েছে!' });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -121,13 +121,6 @@ export default function SellPage({ type }: SellPageProps) {
     setMessage(null);
 
     try {
-      let screenshotUrl = '';
-      if (screenshot) {
-        const storageRef = ref(storage, `sell_requests/${user.uid}/${Date.now()}_${screenshot.name}`);
-        await uploadBytes(storageRef, screenshot);
-        screenshotUrl = await getDownloadURL(storageRef);
-      }
-
       const submissionData: any = {
         userId: user.uid,
         userName: profile.userName,
@@ -136,7 +129,6 @@ export default function SellPage({ type }: SellPageProps) {
         platform: type, // Add platform for AdminPanel compatibility
         price: currentPrice,
         description: form.description,
-        screenshot: screenshotUrl,
         status: 'pending',
         submittedAt: new Date().toISOString()
       };
@@ -403,27 +395,6 @@ export default function SellPage({ type }: SellPageProps) {
               </div>
             </>
           )}
-
-          <div className="grid grid-cols-1 gap-6">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Account Screenshot</label>
-              <label className={cn(
-                "flex items-center justify-center gap-3 px-6 py-4 rounded-2xl border-2 border-dashed cursor-pointer transition-all",
-                theme === 'dark' ? "bg-[#0a0b14] border-[#303456] hover:border-pink-500" : "bg-slate-50 border-slate-200 hover:border-pink-500"
-              )}>
-                <Upload className="w-5 h-5 text-pink-500" />
-                <span className="text-xs font-bold text-slate-500 truncate">
-                  {screenshot ? screenshot.name : 'Upload Proof'}
-                </span>
-                <input 
-                  type="file" 
-                  className="hidden" 
-                  accept="image/*" 
-                  onChange={(e) => setScreenshot(e.target.files?.[0] || null)} 
-                />
-              </label>
-            </div>
-          </div>
 
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Additional Description</label>

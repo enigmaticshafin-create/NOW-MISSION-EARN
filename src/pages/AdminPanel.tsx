@@ -232,7 +232,7 @@ export function AdminPanel() {
         createdAt: new Date().toISOString()
       });
       setNewGiftCode({ code: '', amount: '', maxUses: '' });
-      alert('Gift code created!');
+      setMessage({ type: 'success', text: 'Gift code created!' });
     } catch (error) {
       console.error('Error creating gift code:', error);
     }
@@ -252,7 +252,7 @@ export function AdminPanel() {
         minReferrals: parseInt(newLevel.minReferrals)
       });
       setNewLevel({ level: '', name: '', minReferrals: '' });
-      alert('Level updated!');
+      setMessage({ type: 'success', text: 'Level updated!' });
     } catch (error) {
       // Create if not exists
       await runTransaction(db, async (transaction) => {
@@ -263,7 +263,7 @@ export function AdminPanel() {
         });
       });
       setNewLevel({ level: '', name: '', minReferrals: '' });
-      alert('Level created!');
+      setMessage({ type: 'success', text: 'Level created!' });
     }
   };
 
@@ -271,7 +271,7 @@ export function AdminPanel() {
     if (!window.confirm('Delete this level configuration?')) return;
     try {
       await deleteDoc(doc(db, 'levelConfigs', `level_${level}`));
-      alert('Level deleted!');
+      setMessage({ type: 'success', text: 'Level deleted!' });
     } catch (error) {
       console.error('Error deleting level:', error);
     }
@@ -356,39 +356,52 @@ export function AdminPanel() {
         const userSnap = await transaction.get(userRef);
         if (!userSnap.exists()) throw new Error('User not found');
         
-        const userData = userSnap.data() as UserProfile;
-        
         // Use price from submission if available, otherwise fallback to current settings
         let price = sell.price || 0;
         let balanceField = '';
+        let earningsField = '';
         
-        switch(sell.type || sell.platform) {
+        const platform = sell.type || sell.platform;
+        switch(platform) {
           case 'Gmail':
             if (!price) price = socialSellSettings.gmailPrice;
             balanceField = 'gmailBalance';
+            earningsField = 'gmailEarnings';
             break;
           case 'Facebook':
             if (!price) price = socialSellSettings.facebookPrice;
             balanceField = 'facebookBalance';
+            earningsField = 'facebookEarnings';
             break;
           case 'Instagram':
             if (!price) price = socialSellSettings.instagramPrice;
             balanceField = 'instagramBalance';
+            earningsField = 'instagramEarnings';
             break;
           case 'Telegram':
             if (!price) price = socialSellSettings.telegramPrice;
             balanceField = 'telegramBalance';
+            earningsField = 'telegramEarnings';
             break;
         }
 
         transaction.update(sellRef, { status: 'approved' });
-        transaction.update(userRef, { 
+        
+        const updates: any = {
           balance: increment(price),
-          totalEarned: increment(price),
-          [balanceField]: increment(price)
-        });
+          totalEarned: increment(price)
+        };
+        
+        if (balanceField) {
+          updates[balanceField] = increment(price);
+        }
+        if (earningsField) {
+          updates[earningsField] = increment(price);
+        }
+        
+        transaction.update(userRef, updates);
       });
-      alert('Sell request approved and balance added!');
+      setMessage({ type: 'success', text: 'Sell request approved and balance added!' });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `socialSells/${sell.id}`);
     }
@@ -408,10 +421,10 @@ export function AdminPanel() {
         read: false,
         createdAt: new Date().toISOString()
       });
-      alert('Notification sent successfully!');
+      setMessage({ type: 'success', text: 'Notification sent successfully!' });
     } catch (error) {
       console.error('Error sending notification:', error);
-      alert('Failed to send notification.');
+      setMessage({ type: 'error', text: 'Failed to send notification.' });
     }
   };
 
@@ -420,7 +433,7 @@ export function AdminPanel() {
     if (note === null) return;
     try {
       await updateDoc(doc(db, 'socialSells', id), { status: 'rejected', adminNote: note });
-      alert('Sell request rejected.');
+      setMessage({ type: 'success', text: 'Sell request rejected.' });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `socialSells/${id}`);
     }
@@ -463,7 +476,7 @@ export function AdminPanel() {
     e.preventDefault();
     if (!editingUser) return;
     if (profile?.role !== 'ceo' && profile?.role !== 'admin') {
-      alert("Only the CEO or Admin can edit user details.");
+      setMessage({ type: 'error', text: "Only the CEO or Admin can edit user details." });
       return;
     }
 
@@ -474,7 +487,7 @@ export function AdminPanel() {
     const newStatus = editForm.status;
 
     if (!/^\d{8}$/.test(newId)) {
-      alert("ID must be exactly 8 digits.");
+      setMessage({ type: 'error', text: "ID must be exactly 8 digits." });
       return;
     }
 
@@ -512,11 +525,11 @@ export function AdminPanel() {
         });
       });
 
-      alert('User updated successfully!');
+      setMessage({ type: 'success', text: 'User updated successfully!' });
       setEditingUser(null);
     } catch (error: any) {
       console.error("Update User error:", error);
-      alert(error.message || 'Failed to update user.');
+      setMessage({ type: 'error', text: error.message || 'Failed to update user.' });
     }
   };
 
@@ -562,10 +575,10 @@ export function AdminPanel() {
           totalWithdraw: increment(withdrawal.amount) 
         });
       });
-      alert('Withdrawal completed successfully!');
+      setMessage({ type: 'success', text: 'Withdrawal completed successfully!' });
     } catch (error) {
       console.error("Complete withdrawal error:", error);
-      alert('Failed to complete withdrawal.');
+      setMessage({ type: 'error', text: 'Failed to complete withdrawal.' });
     }
   };
 
@@ -579,7 +592,7 @@ export function AdminPanel() {
         transaction.update(withdrawalRef, { status: 'rejected' });
         transaction.update(userRef, { balance: increment(withdrawal.amount) });
       });
-      alert('Withdrawal rejected and balance refunded!');
+      setMessage({ type: 'success', text: 'Withdrawal rejected and balance refunded!' });
     } catch (error) {
       console.error("Reject withdrawal error:", error);
     }
@@ -599,7 +612,7 @@ export function AdminPanel() {
         }
         transaction.update(doc(db, 'deposits', request.id), { status: 'approved' });
       });
-      alert('Deposit approved and balance credited!');
+      setMessage({ type: 'success', text: 'Deposit approved and balance credited!' });
     } catch (error) {
       console.error("Approve deposit error:", error);
     }
@@ -609,7 +622,7 @@ export function AdminPanel() {
     if (!window.confirm('Reject this deposit request?')) return;
     try {
       await updateDoc(doc(db, 'deposits', id), { status: 'rejected' });
-      alert('Deposit rejected!');
+      setMessage({ type: 'success', text: 'Deposit rejected!' });
     } catch (error) {
       console.error("Reject deposit error:", error);
     }
@@ -647,26 +660,26 @@ export function AdminPanel() {
           migratedCount++;
         }
       }
-      alert(`Successfully migrated ${migratedCount} users to 8-digit IDs.`);
+      setMessage({ type: 'success', text: `Successfully migrated ${migratedCount} users to 8-digit IDs.` });
     } catch (error) {
       console.error("Migration error:", error);
-      alert('Migration failed. Check console for details.');
+      setMessage({ type: 'error', text: 'Migration failed. Check console for details.' });
     }
   };
 
   const handleDeleteUser = async (userId: string, userRole?: string) => {
     if (userRole === 'ceo') {
-      alert("CEO cannot be deleted.");
+      setMessage({ type: 'error', text: "CEO cannot be deleted." });
       return;
     }
     if (profile?.role !== 'ceo') {
-      alert("Only the CEO can delete users.");
+      setMessage({ type: 'error', text: "Only the CEO can delete users." });
       return;
     }
     if (!window.confirm('CRITICAL: Are you sure you want to PERMANENTLY DELETE this user? This action cannot be undone.')) return;
     try {
       await deleteDoc(doc(db, 'users', userId));
-      alert('User deleted successfully.');
+      setMessage({ type: 'success', text: 'User deleted successfully.' });
     } catch (error) {
       console.error("Delete user error:", error);
     }
@@ -705,10 +718,10 @@ export function AdminPanel() {
           }
         }
       });
-      alert('Activation approved!');
+      setMessage({ type: 'success', text: 'Activation approved!' });
     } catch (error) {
       console.error("Approve activation error:", error);
-      alert('Failed to approve activation.');
+      setMessage({ type: 'error', text: 'Failed to approve activation.' });
     }
   };
 
@@ -718,14 +731,14 @@ export function AdminPanel() {
       await runTransaction(db, async (transaction) => {
         transaction.update(doc(db, 'activationRequests', id), { 
           status: 'rejected',
-          rejectionReason: reason || 'Invalid payment details or screenshot.'
+          rejectionReason: reason || 'Invalid payment details.'
         });
         transaction.update(doc(db, 'users', userId), { status: 'inactive' });
       });
-      alert('Activation rejected!');
+      setMessage({ type: 'success', text: 'Activation rejected!' });
     } catch (error) {
       console.error("Reject activation error:", error);
-      alert('Failed to reject activation.');
+      setMessage({ type: 'error', text: 'Failed to reject activation.' });
     }
   };
 
@@ -736,16 +749,16 @@ export function AdminPanel() {
         transaction.update(doc(db, 'activationRequests', id), { status: 'pending' });
         transaction.update(doc(db, 'users', userId), { status: 'pending' });
       });
-      alert('Activation moved back to pending!');
+      setMessage({ type: 'success', text: 'Activation moved back to pending!' });
     } catch (error) {
       console.error("Reactivate activation error:", error);
-      alert('Failed to reactivate activation.');
+      setMessage({ type: 'error', text: 'Failed to reactivate activation.' });
     }
   };
 
   const handleDeactivateAll = async () => {
     if (profile?.role !== 'ceo') {
-      alert("Only the CEO can perform this action.");
+      setMessage({ type: 'error', text: "Only the CEO can perform this action." });
       return;
     }
 
@@ -778,10 +791,10 @@ export function AdminPanel() {
         await batch.commit();
       }
       
-      alert("All users have been deactivated successfully.");
+      setMessage({ type: 'success', text: "All users have been deactivated successfully." });
     } catch (error) {
       console.error("Error deactivating users:", error);
-      alert("Failed to deactivate users.");
+      setMessage({ type: 'error', text: "Failed to deactivate users." });
     } finally {
       setIsSubmitting(false);
     }
@@ -1105,7 +1118,7 @@ export function AdminPanel() {
                                 theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-white border-slate-200"
                               )}
                             />
-                            <button type="button" onClick={() => { navigator.clipboard.writeText(socialSellSettings.gmailPassword || ''); alert('Copied!'); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-pink-500"><Copy className="w-3 h-3" /></button>
+                            <button type="button" onClick={() => { navigator.clipboard.writeText(socialSellSettings.gmailPassword || ''); setMessage({ type: 'success', text: 'Copied!' }); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-pink-500"><Copy className="w-3 h-3" /></button>
                           </div>
                         </div>
                       </div>
@@ -1141,7 +1154,7 @@ export function AdminPanel() {
                                 theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-white border-slate-200"
                               )}
                             />
-                            <button type="button" onClick={() => { navigator.clipboard.writeText(socialSellSettings.facebookPassword || ''); alert('Copied!'); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-pink-500"><Copy className="w-3 h-3" /></button>
+                            <button type="button" onClick={() => { navigator.clipboard.writeText(socialSellSettings.facebookPassword || ''); setMessage({ type: 'success', text: 'Copied!' }); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-pink-500"><Copy className="w-3 h-3" /></button>
                           </div>
                         </div>
                       </div>
@@ -1177,7 +1190,7 @@ export function AdminPanel() {
                                 theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-white border-slate-200"
                               )}
                             />
-                            <button type="button" onClick={() => { navigator.clipboard.writeText(socialSellSettings.instagramPassword || ''); alert('Copied!'); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-pink-500"><Copy className="w-3 h-3" /></button>
+                            <button type="button" onClick={() => { navigator.clipboard.writeText(socialSellSettings.instagramPassword || ''); setMessage({ type: 'success', text: 'Copied!' }); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-pink-500"><Copy className="w-3 h-3" /></button>
                           </div>
                         </div>
                       </div>
@@ -1213,7 +1226,7 @@ export function AdminPanel() {
                                 theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-white border-slate-200"
                               )}
                             />
-                            <button type="button" onClick={() => { navigator.clipboard.writeText(socialSellSettings.telegramPassword || ''); alert('Copied!'); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-pink-500"><Copy className="w-3 h-3" /></button>
+                            <button type="button" onClick={() => { navigator.clipboard.writeText(socialSellSettings.telegramPassword || ''); setMessage({ type: 'success', text: 'Copied!' }); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-pink-500"><Copy className="w-3 h-3" /></button>
                           </div>
                         </div>
                       </div>
@@ -1540,16 +1553,6 @@ export function AdminPanel() {
                     </div>
 
                     <div className="flex items-center gap-4">
-                      {d.screenshot && (
-                        <a 
-                          href={d.screenshot} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="p-4 rounded-2xl bg-slate-500/10 text-slate-500 hover:bg-slate-500 hover:text-white transition-all"
-                        >
-                          <Eye className="w-5 h-5" />
-                        </a>
-                      )}
                       {d.status === 'pending' && (
                         <>
                           <button 
@@ -1687,30 +1690,6 @@ export function AdminPanel() {
                         <div className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Transaction ID</div>
                         <div className="text-sm font-mono font-bold break-all">{act.transactionId}</div>
                       </div>
-
-                      {act.screenshot && (
-                        <div className="space-y-4">
-                          <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest px-2">Screenshot</span>
-                          <div className="space-y-4">
-                            <a 
-                              href={act.screenshot} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-2 text-pink-500 font-bold text-xs hover:underline"
-                            >
-                              <ExternalLink className="w-4 h-4" /> View Screenshot
-                            </a>
-                            <div className="relative w-full max-w-sm aspect-video rounded-2xl overflow-hidden border border-slate-200/20">
-                              <img 
-                                src={act.screenshot} 
-                                alt="Activation Screenshot" 
-                                className="w-full h-full object-cover"
-                                referrerPolicy="no-referrer"
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      )}
 
                       <div className="flex items-center gap-6 text-[10px] font-black uppercase tracking-widest text-slate-500">
                         <span className="flex items-center gap-2"><Clock className="w-3 h-3" /> {new Date(act.submittedAt).toLocaleString()}</span>
@@ -2435,8 +2414,17 @@ export function AdminPanel() {
                   )}>
                     <div className="space-y-8 flex-1">
                       <div className="flex items-center gap-5">
-                        <div className="w-14 h-14 bg-pink-500/10 rounded-[1.25rem] flex items-center justify-center border border-pink-500/20">
-                          <Share2 className="w-7 h-7 text-pink-500" />
+                        <div className={cn(
+                          "w-14 h-14 rounded-[1.25rem] flex items-center justify-center border",
+                          sell.platform === 'Facebook' ? "bg-blue-600/10 border-blue-500/20 text-blue-600" :
+                          sell.platform === 'Gmail' ? "bg-red-500/10 border-red-500/20 text-red-500" :
+                          sell.platform === 'Instagram' ? "bg-pink-600/10 border-pink-500/20 text-pink-600" :
+                          "bg-sky-500/10 border-sky-500/20 text-sky-500"
+                        )}>
+                          {sell.platform === 'Facebook' && <Facebook className="w-7 h-7" />}
+                          {sell.platform === 'Gmail' && <Mail className="w-7 h-7" />}
+                          {sell.platform === 'Instagram' && <Instagram className="w-7 h-7" />}
+                          {sell.platform === 'Telegram' && <Send className="w-7 h-7" />}
                         </div>
                         <div>
                           <div className="font-black text-2xl tracking-tight italic">{sell.userName || 'Anonymous'}</div>
@@ -2454,56 +2442,41 @@ export function AdminPanel() {
                             {sell.idName && (
                               <div className="flex items-center justify-between gap-2">
                                 <div className="text-sm font-bold">ID Name: <span className="text-pink-500">{sell.idName}</span></div>
-                                <button onClick={() => { navigator.clipboard.writeText(sell.idName!); alert('ID Name copied!'); }} className="p-1 hover:bg-pink-500/10 rounded text-pink-500"><Copy className="w-3 h-3" /></button>
+                                <button onClick={() => { navigator.clipboard.writeText(sell.idName!); setMessage({ type: 'success', text: 'ID Name copied!' }); }} className="p-1 hover:bg-pink-500/10 rounded text-pink-500"><Copy className="w-3 h-3" /></button>
                               </div>
                             )}
                             {sell.username && (
                               <div className="flex items-center justify-between gap-2">
                                 <div className="text-sm font-bold">Username: <span className="text-pink-500">{sell.username}</span></div>
-                                <button onClick={() => { navigator.clipboard.writeText(sell.username!); alert('Username copied!'); }} className="p-1 hover:bg-pink-500/10 rounded text-pink-500"><Copy className="w-3 h-3" /></button>
+                                <button onClick={() => { navigator.clipboard.writeText(sell.username!); setMessage({ type: 'success', text: 'Username copied!' }); }} className="p-1 hover:bg-pink-500/10 rounded text-pink-500"><Copy className="w-3 h-3" /></button>
                               </div>
                             )}
                             {sell.email && (
                               <div className="flex items-center justify-between gap-2">
                                 <div className="text-sm font-bold">Email/Gmail: <span className="text-pink-500">{sell.email}</span></div>
-                                <button onClick={() => { navigator.clipboard.writeText(sell.email!); alert('Email copied!'); }} className="p-1 hover:bg-pink-500/10 rounded text-pink-500"><Copy className="w-3 h-3" /></button>
+                                <button onClick={() => { navigator.clipboard.writeText(sell.email!); setMessage({ type: 'success', text: 'Email copied!' }); }} className="p-1 hover:bg-pink-500/10 rounded text-pink-500"><Copy className="w-3 h-3" /></button>
                               </div>
                             )}
                             {sell.gmail && (
                               <div className="flex items-center justify-between gap-2">
                                 <div className="text-sm font-bold">Gmail: <span className="text-pink-500">{sell.gmail}</span></div>
-                                <button onClick={() => { navigator.clipboard.writeText(sell.gmail!); alert('Gmail copied!'); }} className="p-1 hover:bg-pink-500/10 rounded text-pink-500"><Copy className="w-3 h-3" /></button>
+                                <button onClick={() => { navigator.clipboard.writeText(sell.gmail!); setMessage({ type: 'success', text: 'Gmail copied!' }); }} className="p-1 hover:bg-pink-500/10 rounded text-pink-500"><Copy className="w-3 h-3" /></button>
                               </div>
                             )}
                             {sell.password && (
                               <div className="flex items-center justify-between gap-2">
                                 <div className="text-sm font-bold">Password: <span className="text-pink-500">{sell.password}</span></div>
-                                <button onClick={() => { navigator.clipboard.writeText(sell.password!); alert('Password copied!'); }} className="p-1 hover:bg-pink-500/10 rounded text-pink-500"><Copy className="w-3 h-3" /></button>
+                                <button onClick={() => { navigator.clipboard.writeText(sell.password!); setMessage({ type: 'success', text: 'Password copied!' }); }} className="p-1 hover:bg-pink-500/10 rounded text-pink-500"><Copy className="w-3 h-3" /></button>
                               </div>
                             )}
                             {sell.twoFactor && (
                               <div className="flex items-center justify-between gap-2">
                                 <div className="text-sm font-bold">2FA: <span className="text-pink-500">{sell.twoFactor}</span></div>
-                                <button onClick={() => { navigator.clipboard.writeText(sell.twoFactor!); alert('2FA copied!'); }} className="p-1 hover:bg-pink-500/10 rounded text-pink-500"><Copy className="w-3 h-3" /></button>
+                                <button onClick={() => { navigator.clipboard.writeText(sell.twoFactor!); setMessage({ type: 'success', text: '2FA copied!' }); }} className="p-1 hover:bg-pink-500/10 rounded text-pink-500"><Copy className="w-3 h-3" /></button>
                               </div>
                             )}
                           </div>
                         </div>
-
-                        {sell.screenshot && (
-                          <div className={cn(
-                            "p-6 rounded-[2rem] border",
-                            theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
-                          )}>
-                            <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Screenshot</div>
-                            <a href={sell.screenshot} target="_blank" rel="noopener noreferrer" className="block relative aspect-video rounded-xl overflow-hidden border border-slate-200/20">
-                              <img src={sell.screenshot} alt="Screenshot" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                              <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
-                                <ExternalLink className="w-6 h-6 text-white" />
-                              </div>
-                            </a>
-                          </div>
-                        )}
                       </div>
                     </div>
 

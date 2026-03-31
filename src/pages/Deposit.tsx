@@ -34,6 +34,7 @@ export default function Deposit() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
   const [paymentSettings, setPaymentSettings] = useState<any>({});
+  const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -63,17 +64,13 @@ export default function Deposit() {
     e.preventDefault();
     if (!user) return;
 
-    if (!amount || !transactionId || !paymentNumber || !screenshot) {
-      alert('Please fill all fields and upload a screenshot.');
+    if (!amount || !transactionId || !paymentNumber) {
+      setMessage({ type: 'error', text: 'দয়া করে সব ঘর পূরণ করুন।' });
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const storageRef = ref(storage, `deposits/${user.uid}/${Date.now()}_${screenshot.name}`);
-      await uploadBytes(storageRef, screenshot);
-      const screenshotUrl = await getDownloadURL(storageRef);
-
       await addDoc(collection(db, 'deposits'), {
         userId: user.uid,
         userName: profile?.userName || 'Anonymous',
@@ -82,16 +79,18 @@ export default function Deposit() {
         amount: parseFloat(amount),
         transactionId,
         paymentNumber,
-        screenshot: screenshotUrl,
+        screenshot: '',
         status: 'pending',
         submittedAt: new Date().toISOString(),
       });
 
-      alert('Deposit request submitted successfully! Admin will review it soon.');
-      navigate('/');
+      setMessage({ type: 'success', text: 'ডিপোজিট রিকোয়েস্ট সফলভাবে জমা দেওয়া হয়েছে! এডমিন শীঘ্রই এটি পর্যালোচনা করবেন।' });
+      setTimeout(() => {
+        navigate('/');
+      }, 2000);
     } catch (error) {
       console.error('Error submitting deposit:', error);
-      alert('Failed to submit deposit request. Please try again.');
+      setMessage({ type: 'error', text: 'ডিপোজিট রিকোয়েস্ট জমা দিতে ব্যর্থ হয়েছে। আবার চেষ্টা করুন।' });
     } finally {
       setIsSubmitting(false);
     }
@@ -214,44 +213,6 @@ export default function Deposit() {
             />
           </div>
 
-          <div className="space-y-4">
-            <label className="text-xs font-black text-slate-500 uppercase tracking-widest px-2">Upload Screenshot</label>
-            <div className="relative group">
-              <input
-                type="file"
-                id="screenshot-upload"
-                className="hidden"
-                accept="image/*"
-                onChange={handleFileChange}
-              />
-              <label
-                htmlFor="screenshot-upload"
-                className={cn(
-                  "flex flex-col items-center justify-center gap-3 p-8 rounded-3xl border-2 border-dashed cursor-pointer transition-all",
-                  theme === 'dark' 
-                    ? "bg-[#0a0b14] border-[#303456] hover:border-blue-500/50" 
-                    : "bg-slate-50 border-slate-200 hover:border-blue-500/50",
-                  screenshot && "border-blue-500 bg-blue-500/5"
-                )}
-              >
-                <div className={cn(
-                  "w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg transition-transform group-hover:scale-110",
-                  screenshot ? "bg-blue-500" : "bg-slate-500/20"
-                )}>
-                  {screenshot ? <CheckCircle2 className="w-6 h-6 text-white" /> : <Upload className="w-6 h-6 text-blue-500" />}
-                </div>
-                <div className="text-center">
-                  <p className="text-sm font-black uppercase tracking-widest">
-                    {screenshot ? "Screenshot Selected" : "Upload Payment Proof"}
-                  </p>
-                  <p className="text-[10px] font-bold text-slate-500 mt-1">
-                    {screenshot ? `1 Item Selected` : "PNG, JPG up to 5MB"}
-                  </p>
-                </div>
-              </label>
-            </div>
-          </div>
-
           <button
             type="submit"
             disabled={isSubmitting}
@@ -265,6 +226,19 @@ export default function Deposit() {
           </button>
         </form>
       </div>
+      {/* Toast Message */}
+      {message && (
+        <div className={cn(
+          "fixed bottom-20 left-1/2 -translate-x-1/2 px-6 py-3 rounded-2xl shadow-lg flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 z-[100]",
+          message.type === 'success' ? "bg-emerald-600 text-white" : "bg-red-600 text-white"
+        )}>
+          {message.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+          <span className="font-medium">{message.text}</span>
+          <button onClick={() => setMessage(null)} className="ml-2 opacity-50 hover:opacity-100">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
