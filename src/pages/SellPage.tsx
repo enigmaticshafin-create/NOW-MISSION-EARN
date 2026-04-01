@@ -1,15 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../context/ThemeContext';
-import { Mail, Facebook, Send, Instagram, Upload, CheckCircle2, AlertCircle, Loader2, ChevronRight, Copy, RefreshCw, ShieldCheck, MessageCircle } from 'lucide-react';
+import { Facebook, Send, Instagram, CheckCircle2, AlertCircle, Loader2, ChevronRight, ShieldCheck } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../hooks/useAuth';
-import { db, storage } from '../firebase';
+import { db } from '../firebase';
 import { collection, addDoc, doc, getDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { SocialSellSettings } from '../types';
 
 interface SellPageProps {
-  type: 'Gmail' | 'Facebook' | 'Telegram' | 'Instagram';
+  type: 'Facebook' | 'Telegram' | 'Instagram';
 }
 
 export default function SellPage({ type }: SellPageProps) {
@@ -23,16 +22,8 @@ export default function SellPage({ type }: SellPageProps) {
   const [form, setForm] = useState({
     name: '',
     username: '',
-    email: '',
-    password: '',
-    twoFactor: '',
-    gmail: '',
-    price: '',
-    description: ''
   });
   
-  const [screenshot, setScreenshot] = useState<File | null>(null);
-
   useEffect(() => {
     const fetchSettings = async () => {
       try {
@@ -48,14 +39,12 @@ export default function SellPage({ type }: SellPageProps) {
   }, []);
 
   const icons = {
-    Gmail: Mail,
     Facebook: Facebook,
     Telegram: Send,
     Instagram: Instagram
   };
 
   const colors = {
-    Gmail: 'bg-red-500',
     Facebook: 'bg-blue-600',
     Telegram: 'bg-sky-500',
     Instagram: 'bg-pink-600'
@@ -64,7 +53,6 @@ export default function SellPage({ type }: SellPageProps) {
   const Icon = icons[type];
 
   const currentPrice = settings ? (
-    type === 'Gmail' ? settings.gmailPrice :
     type === 'Facebook' ? settings.facebookPrice :
     type === 'Instagram' ? settings.instagramPrice :
     settings.telegramPrice
@@ -93,26 +81,6 @@ export default function SellPage({ type }: SellPageProps) {
     );
   }
 
-  const adminPassword = settings ? (
-    type === 'Gmail' ? settings.gmailPassword :
-    type === 'Facebook' ? settings.facebookPassword :
-    type === 'Instagram' ? settings.instagramPassword :
-    settings.telegramPassword
-  ) : '';
-
-  const generatePassword = () => {
-    if (adminPassword) {
-      setForm({ ...form, password: adminPassword });
-    } else {
-      setMessage({ type: 'error', text: 'অ্যাডমিন এই প্ল্যাটফর্মের জন্য কোনো ডিফল্ট পাসওয়ার্ড সেট করেননি।' });
-    }
-  };
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setMessage({ type: 'success', text: 'ক্লিপবোর্ডে কপি করা হয়েছে!' });
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !profile) return;
@@ -128,7 +96,6 @@ export default function SellPage({ type }: SellPageProps) {
         type,
         platform: type, // Add platform for AdminPanel compatibility
         price: currentPrice,
-        description: form.description,
         status: 'pending',
         submittedAt: new Date().toISOString()
       };
@@ -137,13 +104,6 @@ export default function SellPage({ type }: SellPageProps) {
         submissionData.name = form.name;
         submissionData.idName = form.name; // Add idName for AdminPanel compatibility
         submissionData.username = form.username;
-        submissionData.email = form.email;
-        submissionData.password = form.password;
-        submissionData.twoFactor = form.twoFactor;
-      } else if (type === 'Gmail') {
-        submissionData.gmail = form.gmail;
-        submissionData.email = form.gmail; // Add email for AdminPanel compatibility
-        submissionData.password = form.password;
       }
 
       await addDoc(collection(db, 'socialSells'), submissionData);
@@ -152,14 +112,7 @@ export default function SellPage({ type }: SellPageProps) {
       setForm({
         name: '',
         username: '',
-        email: '',
-        password: '',
-        twoFactor: '',
-        gmail: '',
-        price: '',
-        description: ''
       });
-      setScreenshot(null);
     } catch (error) {
       console.error('Error submitting sell request:', error);
       setMessage({ type: 'error', text: 'Failed to submit request. Please try again. (অনুরোধ জমা দিতে ব্যর্থ হয়েছে। আবার চেষ্টা করুন।)' });
@@ -214,70 +167,6 @@ export default function SellPage({ type }: SellPageProps) {
         </div>
       </div>
 
-      {/* Password Generation Section at the Top */}
-      <div className={cn(
-        "p-6 rounded-3xl border space-y-4",
-        theme === 'dark' ? "bg-pink-500/5 border-pink-500/20" : "bg-pink-50 border-pink-100"
-      )}>
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-black uppercase tracking-widest text-pink-500 italic">Password Management</h3>
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Generate a strong password for your account</p>
-          </div>
-          <button 
-            type="button"
-            onClick={generatePassword}
-            className="flex items-center gap-2 px-4 py-2 bg-pink-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-pink-500/20 hover:scale-105 transition-all"
-          >
-            <RefreshCw className="w-3 h-3" />
-            SET PASSWORD
-          </button>
-        </div>
-        {form.password && (
-          <div className={cn(
-            "p-3 rounded-xl border flex items-center justify-between gap-3",
-            theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-white border-slate-200"
-          )}>
-            <code className="text-sm font-mono font-bold text-pink-500">{form.password}</code>
-            <button 
-              type="button"
-              onClick={() => copyToClipboard(form.password)}
-              className="p-2 hover:bg-pink-500/10 rounded-lg text-pink-500 transition-colors"
-            >
-              <Copy className="w-4 h-4" />
-            </button>
-          </div>
-        )}
-      </div>
-
-      {settings?.approvalMessage && (
-        <div className={cn(
-          "p-6 rounded-3xl border flex items-start gap-4",
-          theme === 'dark' ? "bg-blue-500/5 border-blue-500/20" : "bg-blue-50 border-blue-100"
-        )}>
-          <AlertCircle className="w-6 h-6 text-blue-500 shrink-0 mt-1" />
-          <div className="space-y-1">
-            <p className={cn(
-              "text-sm font-bold leading-relaxed",
-              theme === 'dark' ? "text-blue-200" : "text-blue-900"
-            )}>
-              {settings.approvalMessage}
-            </p>
-            {settings.telegramSupport && (
-              <a 
-                href={settings.telegramSupport}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-blue-500 hover:underline mt-2"
-              >
-                <MessageCircle className="w-3 h-3" />
-                Contact Support on Telegram
-              </a>
-            )}
-          </div>
-        </div>
-      )}
-
       <div className={cn(
         "rounded-[2.5rem] p-8 border space-y-6",
         theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
@@ -313,101 +202,8 @@ export default function SellPage({ type }: SellPageProps) {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Email Address</label>
-                  <input 
-                    type="email"
-                    value={form.email}
-                    onChange={(e) => setForm({ ...form, email: e.target.value })}
-                    placeholder="e.g. john@example.com"
-                    className={cn(
-                      "w-full px-6 py-4 rounded-2xl border focus:ring-2 focus:ring-pink-500 transition-all text-sm font-bold",
-                      theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
-                    )}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Password</label>
-                  <input 
-                    type="text"
-                    value={form.password}
-                    onChange={(e) => setForm({ ...form, password: e.target.value })}
-                    placeholder="Enter password"
-                    className={cn(
-                      "w-full px-6 py-4 rounded-2xl border focus:ring-2 focus:ring-pink-500 transition-all text-sm font-bold",
-                      theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
-                    )}
-                    required
-                    readOnly={!!adminPassword}
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">2FA Code (Optional)</label>
-                <input 
-                  value={form.twoFactor}
-                  onChange={(e) => setForm({ ...form, twoFactor: e.target.value })}
-                  placeholder="Enter 2FA backup codes or secret"
-                  className={cn(
-                    "w-full px-6 py-4 rounded-2xl border focus:ring-2 focus:ring-pink-500 transition-all text-sm font-bold",
-                    theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
-                  )}
-                />
-              </div>
             </>
           )}
-
-          {type === 'Gmail' && (
-            <>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Gmail Address</label>
-                <input 
-                  type="email"
-                  value={form.gmail}
-                  onChange={(e) => setForm({ ...form, gmail: e.target.value })}
-                  placeholder="e.g. example@gmail.com"
-                  className={cn(
-                    "w-full px-6 py-4 rounded-2xl border focus:ring-2 focus:ring-pink-500 transition-all text-sm font-bold",
-                    theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
-                  )}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <div className="flex justify-between items-center px-4">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Password</label>
-                  <span className="text-[9px] font-bold text-pink-500 italic">Password must be strong</span>
-                </div>
-                <input 
-                  type="text"
-                  value={form.password}
-                  onChange={(e) => setForm({ ...form, password: e.target.value })}
-                  placeholder="Enter strong password"
-                  className={cn(
-                    "w-full px-6 py-4 rounded-2xl border focus:ring-2 focus:ring-pink-500 transition-all text-sm font-bold",
-                    theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
-                  )}
-                  required
-                  readOnly={!!adminPassword}
-                />
-              </div>
-            </>
-          )}
-
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Additional Description</label>
-            <textarea 
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              placeholder="Any other details about the account..."
-              className={cn(
-                "w-full px-6 py-4 rounded-2xl border focus:ring-2 focus:ring-pink-500 transition-all text-sm font-bold min-h-[80px]",
-                theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
-              )}
-            />
-          </div>
 
           {message && (
             <div className={cn(

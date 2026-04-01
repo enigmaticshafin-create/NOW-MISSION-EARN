@@ -15,7 +15,6 @@ export interface UserProfile {
   jobEarnings?: number;
   inviteEarnings?: number;
   salaryEarnings?: number;
-  gmailEarnings?: number;
   telegramEarnings?: number;
   facebookEarnings?: number;
   instagramEarnings?: number;
@@ -29,7 +28,6 @@ export interface UserProfile {
   referredBy?: string;
   createdAt: string;
   // Specific Earnings
-  gmailBalance?: number;
   telegramBalance?: number;
   facebookBalance?: number;
   instagramBalance?: number;
@@ -134,7 +132,7 @@ export interface SocialSellSubmission {
   userId: string;
   userName?: string;
   userSequentialId?: string;
-  type: 'Facebook' | 'Gmail' | 'Instagram' | 'Telegram';
+  type: 'Facebook' | 'Instagram' | 'Telegram';
   platform?: string; // Alias for type used in some parts
   status: 'pending' | 'approved' | 'rejected';
   submittedAt: string;
@@ -142,26 +140,15 @@ export interface SocialSellSubmission {
   name?: string;
   idName?: string; // Alias for name
   username?: string;
-  email?: string;
-  password?: string;
-  twoFactor?: string;
   screenshot?: string;
-  // Gmail fields
-  gmail?: string;
   price?: number;
 }
 
 export interface SocialSellSettings {
-  gmailPrice: number;
   facebookPrice: number;
   instagramPrice: number;
   telegramPrice: number;
-  gmailPassword?: string;
-  facebookPassword?: string;
-  instagramPassword?: string;
-  telegramPassword?: string;
   telegramSupport: string;
-  approvalMessage: string;
 }
 
 export interface DynamicSettings {
@@ -174,4 +161,6 @@ export interface DynamicSettings {
   footerQuote: string;
   quoteAuthor: string;
   footerText: string;
+  youtubeVideoUrl?: string;
+  backgroundImageUrl?: string;
 }

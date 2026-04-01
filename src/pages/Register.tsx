@@ -116,7 +116,6 @@ export function Register() {
           jobEarnings: 0,
           inviteEarnings: 0,
           salaryEarnings: 0,
-          gmailEarnings: 0,
           telegramEarnings: 0,
           facebookEarnings: 0,
           instagramEarnings: 0,

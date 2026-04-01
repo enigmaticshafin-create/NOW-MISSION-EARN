@@ -23,8 +23,10 @@ import Withdraw from './pages/Withdraw';
 import { Landing } from './pages/Landing';
 import { Logo } from './components/Logo';
 import { useAuth } from './hooks/useAuth';
-import { auth } from './firebase';
+import { auth, db } from './firebase';
 import { signOut } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { DynamicSettings } from './types';
 import { 
   LayoutDashboard, 
   Gift, 
@@ -62,7 +64,22 @@ function AppContent() {
   const { user, profile, loading } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [dynamicSettings, setDynamicSettings] = useState<DynamicSettings | null>(null);
   const location = useLocation();
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const snap = await getDoc(doc(db, 'dynamicSettings', 'main'));
+        if (snap.exists()) {
+          setDynamicSettings(snap.data() as DynamicSettings);
+        }
+      } catch (error) {
+        console.error('Error fetching dynamic settings:', error);
+      }
+    };
+    fetchSettings();
+  }, []);
 
   if (loading) {
     return (
@@ -200,10 +217,24 @@ function AppContent() {
   );
 
   return (
-    <div className={cn(
-      "min-h-screen transition-colors duration-300",
-      theme === 'dark' ? "bg-[#0a0b14] text-white" : "bg-slate-50 text-slate-900"
-    )}>
+    <div 
+      className={cn(
+        "min-h-screen transition-colors duration-300 relative",
+        theme === 'dark' ? "bg-[#0a0b14] text-white" : "bg-slate-50 text-slate-900"
+      )}
+      style={dynamicSettings?.backgroundImageUrl ? {
+        backgroundImage: `url(${dynamicSettings.backgroundImageUrl})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundAttachment: 'fixed'
+      } : {}}
+    >
+      {dynamicSettings?.backgroundImageUrl && (
+        <div className={cn(
+          "fixed inset-0 pointer-events-none",
+          theme === 'dark' ? "bg-black/60" : "bg-white/40"
+        )} />
+      )}
       {user && <Sidebar />}
       
       <div className={cn(
@@ -291,7 +322,6 @@ function AppContent() {
             <Route path="/wallet" element={user ? <Wallet /> : <Navigate to="/login" />} />
             <Route path="/deposit" element={user ? <Deposit /> : <Navigate to="/login" />} />
             <Route path="/withdraw" element={user ? <Withdraw /> : <Navigate to="/login" />} />
-            <Route path="/gmail-sell" element={user ? <SellPage type="Gmail" /> : <Navigate to="/login" />} />
             <Route path="/facebook-sell" element={user ? <SellPage type="Facebook" /> : <Navigate to="/login" />} />
             <Route path="/telegram-sell" element={user ? <SellPage type="Telegram" /> : <Navigate to="/login" />} />
             <Route path="/instagram-sell" element={user ? <SellPage type="Instagram" /> : <Navigate to="/login" />} />

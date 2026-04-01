@@ -13,7 +13,8 @@ import {
   ChevronRight,
   Search,
   Filter,
-  Users
+  Users,
+  X
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -23,6 +24,22 @@ export default function TeamLeader() {
   const [teamLeaders, setTeamLeaders] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedUserTeam, setSelectedUserTeam] = useState<UserProfile[]>([]);
+  const [showTeamModal, setShowTeamModal] = useState(false);
+  const [viewingUser, setViewingUser] = useState<UserProfile | null>(null);
+
+  const handleViewTeam = async (user: UserProfile) => {
+    setViewingUser(user);
+    try {
+      const q = query(collection(db, 'users'), where('referredBy', '==', user.userId));
+      const snap = await getDocs(q);
+      const team = snap.docs.map(doc => doc.data() as UserProfile);
+      setSelectedUserTeam(team);
+      setShowTeamModal(true);
+    } catch (error) {
+      console.error("View team error:", error);
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -131,6 +148,12 @@ export default function TeamLeader() {
               </div>
 
               <div className="flex items-center justify-between sm:justify-end gap-4">
+                <button 
+                  onClick={() => handleViewTeam(leader)}
+                  className="px-4 py-2 bg-pink-500/10 text-pink-500 rounded-full text-xs font-black uppercase tracking-widest hover:bg-pink-500 hover:text-white transition-all"
+                >
+                  View Team
+                </button>
                 <div className={cn(
                   "px-4 py-2 rounded-full text-xs font-black uppercase tracking-widest flex items-center gap-2",
                   leader.status === 'active' ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500"
@@ -151,6 +174,69 @@ export default function TeamLeader() {
           )}
         </div>
       </div>
+
+      {/* Team Modal */}
+      {showTeamModal && viewingUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowTeamModal(false)} />
+          <div className={cn(
+            "relative w-full max-w-2xl rounded-[2.5rem] p-8 border shadow-2xl animate-in zoom-in-95 duration-200",
+            theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
+          )}>
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-pink-500/10 rounded-2xl flex items-center justify-center">
+                  <Users className="w-6 h-6 text-pink-500" />
+                </div>
+                <div>
+                  <h3 className="text-2xl font-black tracking-tight italic uppercase">{viewingUser.userName}'s Team</h3>
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Total Members: {selectedUserTeam.length}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowTeamModal(false)}
+                className="p-2 hover:bg-slate-500/10 rounded-xl transition-colors"
+              >
+                <X className="w-6 h-6 text-slate-500" />
+              </button>
+            </div>
+
+            <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+              {selectedUserTeam.length === 0 ? (
+                <div className="text-center py-12">
+                  <p className="text-sm font-black uppercase tracking-widest text-slate-400 italic">No team members yet</p>
+                </div>
+              ) : (
+                <div className="grid gap-3">
+                  {selectedUserTeam.map(member => (
+                    <div 
+                      key={member.uid}
+                      className={cn(
+                        "p-4 rounded-2xl border flex items-center justify-between",
+                        theme === 'dark' ? "bg-slate-500/5 border-slate-500/10" : "bg-slate-50 border-slate-100"
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-slate-500/10 rounded-xl flex items-center justify-center">
+                          <UserIcon className="w-5 h-5 text-slate-400" />
+                        </div>
+                        <div>
+                          <p className="font-black text-sm">{member.userName}</p>
+                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">ID: {member.userId} | {member.status}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-black text-pink-500">BDT {(member.totalEarned || 0).toFixed(2)}</p>
+                        <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Earnings</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

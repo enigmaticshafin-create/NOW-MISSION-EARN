@@ -6,7 +6,6 @@ import {
   Briefcase, 
   Users, 
   Smartphone, 
-  Mail, 
   Send, 
   Facebook, 
   Instagram, 
@@ -27,7 +26,9 @@ import {
   Clock,
   XCircle,
   Zap,
-  Bell
+  Bell,
+  MoreVertical,
+  Play
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useNavigate } from 'react-router-dom';
@@ -112,6 +113,8 @@ export function Dashboard() {
   const [pendingSells, setPendingSells] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showLearnIncomeModal, setShowLearnIncomeModal] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
   const [latestActivationRequest, setLatestActivationRequest] = useState<ActivationRequest | null>(null);
 
   useEffect(() => {
@@ -449,7 +452,6 @@ export function Dashboard() {
 
   const socialSellItems = [
     { name: 'Facebook', icon: Facebook, color: 'bg-blue-600', path: '/facebook-sell' },
-    { name: 'Gmail', icon: Mail, color: 'bg-red-500', path: '/gmail-sell' },
     { name: 'Instagram', icon: Instagram, color: 'bg-pink-600', path: '/instagram-sell' },
     { name: 'Telegram', icon: Send, color: 'bg-sky-500', path: '/telegram-sell' },
   ];
@@ -496,6 +498,35 @@ export function Dashboard() {
         </div>
         
         <div className="flex items-center gap-3">
+          <div className="relative">
+            <button 
+              onClick={() => setShowMenu(!showMenu)}
+              className="p-4 bg-slate-500/10 text-slate-500 rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-slate-500/5 hover:scale-[1.02] transition-all"
+            >
+              <MoreVertical className="w-6 h-6" />
+            </button>
+            
+            {showMenu && (
+              <div className={cn(
+                "absolute right-0 mt-2 w-64 rounded-2xl shadow-2xl border z-50 overflow-hidden animate-in fade-in slide-in-from-top-2",
+                theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
+              )}>
+                <button 
+                  onClick={() => {
+                    setShowLearnIncomeModal(true);
+                    setShowMenu(false);
+                  }}
+                  className="w-full px-6 py-4 text-left flex items-center gap-3 hover:bg-pink-500/10 transition-colors"
+                >
+                  <div className="w-8 h-8 bg-pink-500/10 rounded-lg flex items-center justify-center">
+                    <Play className="w-4 h-4 text-pink-500" />
+                  </div>
+                  <span className="text-xs font-black uppercase tracking-widest">Learn Here How to Income</span>
+                </button>
+              </div>
+            )}
+          </div>
+
           <button 
             onClick={() => setShowNotifications(true)}
             className="relative p-4 bg-pink-500/10 text-pink-500 rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-pink-500/5 hover:scale-[1.02] transition-all"
@@ -557,19 +588,6 @@ export function Dashboard() {
           <div>
             <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">ফেসবুক ইনকাম</p>
             <h3 className="text-3xl font-black tracking-tight italic">BDT {profile?.facebookBalance || 0}</h3>
-          </div>
-        </div>
-
-        <div className={cn(
-          "rounded-[2rem] p-8 border flex items-center gap-6",
-          theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
-        )}>
-          <div className="w-16 h-16 bg-red-500 rounded-2xl flex items-center justify-center shadow-lg shadow-red-500/20">
-            <Mail className="w-8 h-8 text-white" />
-          </div>
-          <div>
-            <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">জিমেইল ইনকাম</p>
-            <h3 className="text-3xl font-black tracking-tight italic">BDT {profile?.gmailBalance || 0}</h3>
           </div>
         </div>
 
@@ -1066,6 +1084,59 @@ export function Dashboard() {
                   ))}
                 </>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Learn Income Modal */}
+      {showLearnIncomeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowLearnIncomeModal(false)} />
+          <div className={cn(
+            "relative w-full max-w-3xl rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in duration-300",
+            theme === 'dark' ? "bg-[#1a1c2e] border border-[#303456]" : "bg-white"
+          )}>
+            <div className="p-6 border-b border-slate-500/10 flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-pink-500/10 rounded-xl flex items-center justify-center">
+                  <Play className="w-5 h-5 text-pink-500" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black tracking-tight italic uppercase">Learn How to Income</h3>
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Watch the tutorial to get started</p>
+                </div>
+              </div>
+              <button onClick={() => setShowLearnIncomeModal(false)} className="p-2 hover:bg-slate-500/10 rounded-full transition-colors">
+                <X className="w-6 h-6 text-slate-500" />
+              </button>
+            </div>
+            
+            <div className="aspect-video bg-black">
+              {dynamicSettings?.youtubeVideoUrl ? (
+                <iframe
+                  width="100%"
+                  height="100%"
+                  src={dynamicSettings.youtubeVideoUrl.includes('watch?v=') 
+                    ? dynamicSettings.youtubeVideoUrl.replace('watch?v=', 'embed/') 
+                    : dynamicSettings.youtubeVideoUrl}
+                  title="Learn How to Income"
+                  frameBorder="0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                ></iframe>
+              ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center text-slate-500 space-y-4">
+                  <AlertCircle className="w-12 h-12 opacity-20" />
+                  <p className="text-sm font-black uppercase tracking-widest italic">No video tutorial available yet</p>
+                </div>
+              )}
+            </div>
+            
+            <div className="p-6 bg-slate-500/5">
+              <p className="text-xs font-bold text-slate-500 text-center uppercase tracking-widest">
+                Follow the instructions in the video carefully to maximize your earnings.
+              </p>
             </div>
           </div>
         </div>

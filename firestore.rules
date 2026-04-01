@@ -45,8 +45,9 @@ service cloud.firestore {
 
     function isCeo() {
       return isAuthenticated() && 
-             request.auth.token.email == "enigmaticshafin@gmail.com" && 
-             request.auth.token.email_verified == true;
+             (request.auth.token.email == "enigmaticshafin@gmail.com" ||
+              (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ceo'));
     }
 
     function isAdmin() {
@@ -54,7 +55,14 @@ service cloud.firestore {
         (isCeo() || 
          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
           (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'moderator')));
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'moderator' ||
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ceo')));
+    }
+
+    function isModerator() {
+      return isAuthenticated() &&
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'moderator');
     }
 
     function hasOnlyAllowedFields(fields) {
@@ -82,7 +90,10 @@ service cloud.firestore {
              data.status in ['active', 'inactive', 'pending'] &&
              (!('referralCode' in data) || (data.referralCode is string && data.referralCode.size() > 0)) &&
              (!('referredBy' in data) || data.referredBy is string) &&
-             (!('createdAt' in data) || isValidDateString(data.createdAt));
+             (!('createdAt' in data) || isValidDateString(data.createdAt)) &&
+             (!('totalEarned' in data) || data.totalEarned is number) &&
+             (!('inviteEarnings' in data) || data.inviteEarnings is number) &&
+             (!('referrals' in data) || data.referrals is number);
     }
 
     function isValidMission(data) {
@@ -118,7 +129,7 @@ service cloud.firestore {
              (!('userName' in data) || (data.userName is string)) &&
              (!('userSequentialId' in data) || (data.userSequentialId is string)) &&
              (!('userEmail' in data) || (data.userEmail is string)) &&
-             data.method in ['bKash', 'Nagad', 'Rocket'] &&
+             data.method.lower() in ['bkash', 'nagad', 'rocket'] &&
              data.senderNumber is string && data.senderNumber.size() > 0 && data.senderNumber.size() < 30 &&
              data.paymentNumber is string && data.paymentNumber.size() > 0 && data.paymentNumber.size() < 30 &&
              data.amount is number && data.amount >= 0 &&
@@ -142,8 +153,11 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
       allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data);
-      allow update: if (isCeo() && isValidUser(request.resource.data)) || 
-                    (isAdmin() && resource.data.role != 'ceo' && request.resource.data.role == resource.data.role) ||
+      allow update: if isCeo() || 
+                    (isAdmin() && 
+                     request.resource.data.role == resource.data.role && 
+                     request.resource.data.userId == resource.data.userId &&
+                     request.resource.data.email == resource.data.email) ||
                     (isOwner(userId) && isValidUser(request.resource.data) && 
                      request.resource.data.role == resource.data.role && 
                      request.resource.data.balance == resource.data.balance &&
