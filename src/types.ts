@@ -18,6 +18,7 @@ export interface UserProfile {
   telegramEarnings?: number;
   facebookEarnings?: number;
   instagramEarnings?: number;
+  gmailEarnings?: number;
   marketingEarnings?: number;
   adsEarnings?: number;
   totalWithdraw?: number;
@@ -31,6 +32,7 @@ export interface UserProfile {
   telegramBalance?: number;
   facebookBalance?: number;
   instagramBalance?: number;
+  gmailBalance?: number;
   salaryBalance?: number;
 }
 
@@ -132,14 +134,17 @@ export interface SocialSellSubmission {
   userId: string;
   userName?: string;
   userSequentialId?: string;
-  type: 'Facebook' | 'Instagram' | 'Telegram';
+  type: 'Facebook' | 'Instagram' | 'Telegram' | 'Gmail';
   platform?: string; // Alias for type used in some parts
   status: 'pending' | 'approved' | 'rejected';
   submittedAt: string;
-  // Facebook/Instagram fields
+  // Facebook/Instagram/Gmail fields
   name?: string;
   idName?: string; // Alias for name
   username?: string;
+  email?: string;
+  password?: string;
+  twoFactor?: string;
   screenshot?: string;
   price?: number;
 }
@@ -148,6 +153,16 @@ export interface SocialSellSettings {
   facebookPrice: number;
   instagramPrice: number;
   telegramPrice: number;
+  gmailPrice: number;
+  facebookEnabled: boolean;
+  instagramEnabled: boolean;
+  telegramEnabled: boolean;
+  gmailEnabled: boolean;
+  facebookDisabledReason?: string;
+  instagramDisabledReason?: string;
+  telegramDisabledReason?: string;
+  gmailDisabledReason?: string;
+  adminPassword?: string;
   telegramSupport: string;
 }
 

@@ -119,6 +119,7 @@ export function Register() {
           telegramEarnings: 0,
           facebookEarnings: 0,
           instagramEarnings: 0,
+          gmailEarnings: 0,
           marketingEarnings: 0,
           adsEarnings: 0,
           totalWithdraw: 0,
@@ -129,6 +130,11 @@ export function Register() {
           referredBy: referrerUserId || referBy,
           status: isCeo ? 'active' : 'inactive',
           createdAt: new Date().toISOString(),
+          telegramBalance: 0,
+          facebookBalance: 0,
+          instagramBalance: 0,
+          gmailBalance: 0,
+          salaryBalance: 0
         });
 
         // Add to referral_lookup for public verification

@@ -41,6 +41,16 @@ export function AdminPanel() {
     facebookPrice: 10,
     instagramPrice: 10,
     telegramPrice: 10,
+    gmailPrice: 10,
+    facebookEnabled: true,
+    instagramEnabled: true,
+    telegramEnabled: false,
+    gmailEnabled: true,
+    facebookDisabledReason: '',
+    instagramDisabledReason: '',
+    telegramDisabledReason: 'Telegram selling is temporarily off.',
+    gmailDisabledReason: '',
+    adminPassword: 'password123',
     telegramSupport: ''
   });
   const [dynamicSettings, setDynamicSettings] = useState<DynamicSettings>({
@@ -379,6 +389,11 @@ export function AdminPanel() {
             balanceField = 'telegramBalance';
             earningsField = 'telegramEarnings';
             break;
+          case 'Gmail':
+            if (!price) price = socialSellSettings.gmailPrice;
+            balanceField = 'gmailBalance';
+            earningsField = 'gmailEarnings';
+            break;
         }
 
         transaction.update(sellRef, { status: 'approved' });
@@ -687,6 +702,11 @@ export function AdminPanel() {
         const reqRef = doc(db, 'activationRequests', act.id);
         const userRef = doc(db, 'users', act.userId);
         
+        const reqSnap = await transaction.get(reqRef);
+        if (!reqSnap.exists() || reqSnap.data().status !== 'pending') {
+          throw new Error('Request is not pending or does not exist.');
+        }
+
         const userSnap = await transaction.get(userRef);
         if (!userSnap.exists()) {
           throw new Error('User document not found.');
@@ -1881,26 +1901,176 @@ export function AdminPanel() {
                     <p className="text-slate-500 font-black uppercase tracking-[0.2em] text-[10px]">Set prices and support links for social media accounts</p>
                   </div>
 
-                  <form onSubmit={handleUpdateSocialSellSettings} className="space-y-6">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Facebook Price (BDT)</label>
+                  <form onSubmit={handleUpdateSocialSellSettings} className="space-y-8">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                      <div className="space-y-4 p-6 rounded-3xl border border-slate-200 dark:border-[#303456] bg-slate-50/50 dark:bg-[#0a0b14]/50">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Facebook</label>
+                          <button 
+                            type="button"
+                            onClick={() => setSocialSellSettings({...socialSellSettings, facebookEnabled: !socialSellSettings.facebookEnabled})}
+                            className={cn(
+                              "w-10 h-5 rounded-full transition-all relative",
+                              socialSellSettings.facebookEnabled ? "bg-emerald-500" : "bg-slate-400"
+                            )}
+                          >
+                            <div className={cn(
+                              "absolute top-1 w-3 h-3 bg-white rounded-full transition-all",
+                              socialSellSettings.facebookEnabled ? "right-1" : "left-1"
+                            )} />
+                          </button>
+                        </div>
                         <input 
                           type="number"
                           value={socialSellSettings.facebookPrice}
                           onChange={e => setSocialSellSettings({...socialSellSettings, facebookPrice: Number(e.target.value)})}
+                          placeholder="Price"
                           className={cn(
-                            "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500",
-                            theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
+                            "w-full rounded-xl p-3 text-sm font-bold border outline-none focus:border-pink-500",
+                            theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-white border-slate-200"
                           )}
                         />
+                        {!socialSellSettings.facebookEnabled && (
+                          <input 
+                            value={socialSellSettings.facebookDisabledReason}
+                            onChange={e => setSocialSellSettings({...socialSellSettings, facebookDisabledReason: e.target.value})}
+                            placeholder="Reason for disabling"
+                            className={cn(
+                              "w-full rounded-xl p-3 text-[10px] font-bold border outline-none focus:border-pink-500",
+                              theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-white border-slate-200"
+                            )}
+                          />
+                        )}
                       </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Instagram Price (BDT)</label>
+
+                      <div className="space-y-4 p-6 rounded-3xl border border-slate-200 dark:border-[#303456] bg-slate-50/50 dark:bg-[#0a0b14]/50">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Instagram</label>
+                          <button 
+                            type="button"
+                            onClick={() => setSocialSellSettings({...socialSellSettings, instagramEnabled: !socialSellSettings.instagramEnabled})}
+                            className={cn(
+                              "w-10 h-5 rounded-full transition-all relative",
+                              socialSellSettings.instagramEnabled ? "bg-emerald-500" : "bg-slate-400"
+                            )}
+                          >
+                            <div className={cn(
+                              "absolute top-1 w-3 h-3 bg-white rounded-full transition-all",
+                              socialSellSettings.instagramEnabled ? "right-1" : "left-1"
+                            )} />
+                          </button>
+                        </div>
                         <input 
                           type="number"
                           value={socialSellSettings.instagramPrice}
                           onChange={e => setSocialSellSettings({...socialSellSettings, instagramPrice: Number(e.target.value)})}
+                          placeholder="Price"
+                          className={cn(
+                            "w-full rounded-xl p-3 text-sm font-bold border outline-none focus:border-pink-500",
+                            theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-white border-slate-200"
+                          )}
+                        />
+                        {!socialSellSettings.instagramEnabled && (
+                          <input 
+                            value={socialSellSettings.instagramDisabledReason}
+                            onChange={e => setSocialSellSettings({...socialSellSettings, instagramDisabledReason: e.target.value})}
+                            placeholder="Reason for disabling"
+                            className={cn(
+                              "w-full rounded-xl p-3 text-[10px] font-bold border outline-none focus:border-pink-500",
+                              theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-white border-slate-200"
+                            )}
+                          />
+                        )}
+                      </div>
+
+                      <div className="space-y-4 p-6 rounded-3xl border border-slate-200 dark:border-[#303456] bg-slate-50/50 dark:bg-[#0a0b14]/50">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Gmail</label>
+                          <button 
+                            type="button"
+                            onClick={() => setSocialSellSettings({...socialSellSettings, gmailEnabled: !socialSellSettings.gmailEnabled})}
+                            className={cn(
+                              "w-10 h-5 rounded-full transition-all relative",
+                              socialSellSettings.gmailEnabled ? "bg-emerald-500" : "bg-slate-400"
+                            )}
+                          >
+                            <div className={cn(
+                              "absolute top-1 w-3 h-3 bg-white rounded-full transition-all",
+                              socialSellSettings.gmailEnabled ? "right-1" : "left-1"
+                            )} />
+                          </button>
+                        </div>
+                        <input 
+                          type="number"
+                          value={socialSellSettings.gmailPrice}
+                          onChange={e => setSocialSellSettings({...socialSellSettings, gmailPrice: Number(e.target.value)})}
+                          placeholder="Price"
+                          className={cn(
+                            "w-full rounded-xl p-3 text-sm font-bold border outline-none focus:border-pink-500",
+                            theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-white border-slate-200"
+                          )}
+                        />
+                        {!socialSellSettings.gmailEnabled && (
+                          <input 
+                            value={socialSellSettings.gmailDisabledReason}
+                            onChange={e => setSocialSellSettings({...socialSellSettings, gmailDisabledReason: e.target.value})}
+                            placeholder="Reason for disabling"
+                            className={cn(
+                              "w-full rounded-xl p-3 text-[10px] font-bold border outline-none focus:border-pink-500",
+                              theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-white border-slate-200"
+                            )}
+                          />
+                        )}
+                      </div>
+
+                      <div className="space-y-4 p-6 rounded-3xl border border-slate-200 dark:border-[#303456] bg-slate-50/50 dark:bg-[#0a0b14]/50">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Telegram</label>
+                          <button 
+                            type="button"
+                            onClick={() => setSocialSellSettings({...socialSellSettings, telegramEnabled: !socialSellSettings.telegramEnabled})}
+                            className={cn(
+                              "w-10 h-5 rounded-full transition-all relative",
+                              socialSellSettings.telegramEnabled ? "bg-emerald-500" : "bg-slate-400"
+                            )}
+                          >
+                            <div className={cn(
+                              "absolute top-1 w-3 h-3 bg-white rounded-full transition-all",
+                              socialSellSettings.telegramEnabled ? "right-1" : "left-1"
+                            )} />
+                          </button>
+                        </div>
+                        <input 
+                          type="number"
+                          value={socialSellSettings.telegramPrice}
+                          onChange={e => setSocialSellSettings({...socialSellSettings, telegramPrice: Number(e.target.value)})}
+                          placeholder="Price"
+                          className={cn(
+                            "w-full rounded-xl p-3 text-sm font-bold border outline-none focus:border-pink-500",
+                            theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-white border-slate-200"
+                          )}
+                        />
+                        {!socialSellSettings.telegramEnabled && (
+                          <input 
+                            value={socialSellSettings.telegramDisabledReason}
+                            onChange={e => setSocialSellSettings({...socialSellSettings, telegramDisabledReason: e.target.value})}
+                            placeholder="Reason for disabling"
+                            className={cn(
+                              "w-full rounded-xl p-3 text-[10px] font-bold border outline-none focus:border-pink-500",
+                              theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-white border-slate-200"
+                            )}
+                          />
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Global Password (for Social Sells)</label>
+                        <input 
+                          value={socialSellSettings.adminPassword}
+                          onChange={e => setSocialSellSettings({...socialSellSettings, adminPassword: e.target.value})}
+                          placeholder="Enter password for users to use"
                           className={cn(
                             "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500",
                             theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
@@ -1908,29 +2078,17 @@ export function AdminPanel() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Telegram Price (BDT)</label>
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Telegram Support Link</label>
                         <input 
-                          type="number"
-                          value={socialSellSettings.telegramPrice}
-                          onChange={e => setSocialSellSettings({...socialSellSettings, telegramPrice: Number(e.target.value)})}
+                          value={socialSellSettings.telegramSupport}
+                          onChange={e => setSocialSellSettings({...socialSellSettings, telegramSupport: e.target.value})}
+                          placeholder="https://t.me/..."
                           className={cn(
                             "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500",
                             theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
                           )}
                         />
                       </div>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Telegram Support Link</label>
-                      <input 
-                        value={socialSellSettings.telegramSupport}
-                        onChange={e => setSocialSellSettings({...socialSellSettings, telegramSupport: e.target.value})}
-                        placeholder="https://t.me/..."
-                        className={cn(
-                          "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500",
-                          theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
-                        )}
-                      />
                     </div>
                     <button 
                       type="submit" 
@@ -2267,6 +2425,24 @@ export function AdminPanel() {
                               <div className="flex items-center justify-between gap-2">
                                 <div className="text-sm font-bold">Username: <span className="text-pink-500">{sell.username}</span></div>
                                 <button onClick={() => { navigator.clipboard.writeText(sell.username!); setMessage({ type: 'success', text: 'Username copied!' }); }} className="p-1 hover:bg-pink-500/10 rounded text-pink-500"><Copy className="w-3 h-3" /></button>
+                              </div>
+                            )}
+                            {sell.email && (
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="text-sm font-bold">Email/Gmail: <span className="text-pink-500">{sell.email}</span></div>
+                                <button onClick={() => { navigator.clipboard.writeText(sell.email!); setMessage({ type: 'success', text: 'Email copied!' }); }} className="p-1 hover:bg-pink-500/10 rounded text-pink-500"><Copy className="w-3 h-3" /></button>
+                              </div>
+                            )}
+                            {sell.password && (
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="text-sm font-bold">Password: <span className="text-pink-500">{sell.password}</span></div>
+                                <button onClick={() => { navigator.clipboard.writeText(sell.password!); setMessage({ type: 'success', text: 'Password copied!' }); }} className="p-1 hover:bg-pink-500/10 rounded text-pink-500"><Copy className="w-3 h-3" /></button>
+                              </div>
+                            )}
+                            {sell.twoFactor && (
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="text-sm font-bold">2FA: <span className="text-pink-500">{sell.twoFactor}</span></div>
+                                <button onClick={() => { navigator.clipboard.writeText(sell.twoFactor!); setMessage({ type: 'success', text: '2FA copied!' }); }} className="p-1 hover:bg-pink-500/10 rounded text-pink-500"><Copy className="w-3 h-3" /></button>
                               </div>
                             )}
                           </div>

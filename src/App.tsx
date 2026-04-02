@@ -325,6 +325,7 @@ function AppContent() {
             <Route path="/facebook-sell" element={user ? <SellPage type="Facebook" /> : <Navigate to="/login" />} />
             <Route path="/telegram-sell" element={user ? <SellPage type="Telegram" /> : <Navigate to="/login" />} />
             <Route path="/instagram-sell" element={user ? <SellPage type="Instagram" /> : <Navigate to="/login" />} />
+            <Route path="/gmail-sell" element={user ? <SellPage type="Gmail" /> : <Navigate to="/login" />} />
             <Route path="/settings" element={user ? <Settings /> : <Navigate to="/login" />} />
             <Route path="/helpline" element={user ? <HelpLine /> : <Navigate to="/login" />} />
             <Route path="/landing" element={<Landing />} />

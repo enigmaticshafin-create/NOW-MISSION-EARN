@@ -9,6 +9,7 @@ import {
   Send, 
   Facebook, 
   Instagram, 
+  Mail,
   Megaphone,
   ArrowDownCircle,
   ArrowUpCircle
@@ -29,6 +30,7 @@ export default function Wallet() {
     { name: 'Telegram balance', value: profile?.telegramBalance || 0, icon: Send, color: 'bg-sky-500' },
     { name: 'Facebook balance', value: profile?.facebookBalance || 0, icon: Facebook, color: 'bg-blue-600' },
     { name: 'Instagram balance', value: profile?.instagramBalance || 0, icon: Instagram, color: 'bg-pink-600' },
+    { name: 'Gmail balance', value: profile?.gmailBalance || 0, icon: Mail, color: 'bg-red-500' },
     { name: 'Total Marketing Wallet', value: profile?.marketingEarnings || 0, icon: Megaphone, color: 'bg-amber-500' },
     { name: 'Ads wallet', value: profile?.adsEarnings || 0, icon: Smartphone, color: 'bg-purple-500' },
   ];

@@ -9,6 +9,7 @@ import {
   Send, 
   Facebook, 
   Instagram, 
+  Mail,
   Megaphone,
   ArrowDownCircle,
   ArrowUpCircle,
@@ -453,6 +454,7 @@ export function Dashboard() {
   const socialSellItems = [
     { name: 'Facebook', icon: Facebook, color: 'bg-blue-600', path: '/facebook-sell' },
     { name: 'Instagram', icon: Instagram, color: 'bg-pink-600', path: '/instagram-sell' },
+    { name: 'Gmail', icon: Mail, color: 'bg-red-500', path: '/gmail-sell' },
     { name: 'Telegram', icon: Send, color: 'bg-sky-500', path: '/telegram-sell' },
   ];
 
