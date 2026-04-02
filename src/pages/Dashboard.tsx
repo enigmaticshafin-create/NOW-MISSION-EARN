@@ -35,7 +35,7 @@ import { cn } from '../lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { collection, query, getDocs, where, addDoc, doc, getDoc, updateDoc, setDoc, onSnapshot, orderBy, writeBatch, runTransaction, limit } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../firebase';
+import { db, storage, handleFirestoreError } from '../firebase';
 import { Mission, MissionSubmission, PaymentSettings, DynamicSettings, ActivationRequest } from '../types';
 
 enum OperationType {
@@ -231,11 +231,6 @@ export function Dashboard() {
         const missionsData = missionsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Mission));
         setMissions(missionsData);
 
-        const settingsDoc = await getDoc(doc(db, 'settings', 'paymentNumbers'));
-        if (settingsDoc.exists()) {
-          setPaymentSettings(settingsDoc.data() as PaymentSettings);
-        }
-
         const submissionsQuery = query(collection(db, 'missionSubmissions'), where('userId', '==', user.uid));
         const submissionsSnap = await getDocs(submissionsQuery);
         const submissionsData = submissionsSnap.docs.map(doc => doc.data() as MissionSubmission);
@@ -249,6 +244,17 @@ export function Dashboard() {
 
     fetchData();
   }, [user]);
+
+  useEffect(() => {
+    const unsubscribe = onSnapshot(doc(db, 'settings', 'paymentNumbers'), (snapshot) => {
+      if (snapshot.exists()) {
+        setPaymentSettings(snapshot.data() as PaymentSettings);
+      }
+    }, (error) => {
+      console.error("Error listening to activation settings:", error);
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     const fixAdminProfile = async () => {
@@ -363,7 +369,7 @@ export function Dashboard() {
     try {
       const activationData = {
         userId: user.uid,
-        userName: profile.userName || 'Unknown',
+        userName: profile.userName || user.displayName || 'Unknown',
         userSequentialId: profile.userId || 'Unknown',
         userEmail: profile.email || user.email || 'Unknown',
         method: activationMethod === 'bkash' ? 'bKash' : activationMethod === 'nagad' ? 'Nagad' : 'Rocket',
@@ -398,7 +404,7 @@ export function Dashboard() {
           transaction.set(usedTxRef, {
             usedAt: new Date().toISOString(),
             userId: user.uid,
-            userName: profile.userName || 'Unknown',
+            userName: profile.userName || user.displayName || 'Unknown',
             type: 'activation'
           });
         });

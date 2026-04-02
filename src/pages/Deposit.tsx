@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, getDocs, addDoc, doc, getDoc, writeBatch, where } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, auth, storage } from '../firebase';
+import { collection, addDoc, doc, onSnapshot } from 'firebase/firestore';
+import { db, handleFirestoreError } from '../firebase';
+import { OperationType } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
 import { 
@@ -37,14 +37,14 @@ export default function Deposit() {
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   useEffect(() => {
-    const fetchSettings = async () => {
-      const docRef = doc(db, 'settings', 'payment');
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        setPaymentSettings(docSnap.data());
+    const unsubscribe = onSnapshot(doc(db, 'settings', 'payment'), (snapshot) => {
+      if (snapshot.exists()) {
+        setPaymentSettings(snapshot.data());
       }
-    };
-    fetchSettings();
+    }, (error) => {
+      console.error("Error listening to deposit settings:", error);
+    });
+    return () => unsubscribe();
   }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -73,7 +73,7 @@ export default function Deposit() {
     try {
       await addDoc(collection(db, 'deposits'), {
         userId: user.uid,
-        userName: profile?.userName || 'Anonymous',
+        userName: profile?.userName || user.displayName || 'Anonymous',
         userSequentialId: profile?.userId || 'N/A',
         method,
         amount: parseFloat(amount),
@@ -89,8 +89,7 @@ export default function Deposit() {
         navigate('/');
       }, 2000);
     } catch (error) {
-      console.error('Error submitting deposit:', error);
-      setMessage({ type: 'error', text: 'ডিপোজিট রিকোয়েস্ট জমা দিতে ব্যর্থ হয়েছে। আবার চেষ্টা করুন।' });
+      handleFirestoreError(error, OperationType.CREATE, 'deposits');
     } finally {
       setIsSubmitting(false);
     }

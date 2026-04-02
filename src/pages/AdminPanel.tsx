@@ -7,7 +7,7 @@ import {
   ShieldCheck, AlertCircle, Clock, CheckCircle2, TrendingUp, 
   UserPlus, Ban, Search, Filter, ArrowUpRight, History, Trash2, Edit3, ExternalLink, DollarSign, Settings as SettingsIcon, Save,
   Gift, Award, ArrowDownCircle, ArrowUpCircle, Copy, XCircle, Share2, Smartphone, ShieldAlert, Loader2, Zap,
-  Facebook, Instagram, Send, MessageCircle
+  Facebook, Instagram, Send, MessageCircle, Mail
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useTheme } from '../context/ThemeContext';
@@ -31,6 +31,7 @@ export function AdminPanel() {
   const [depFilter, setDepFilter] = useState<'pending' | 'approved' | 'rejected'>('pending');
   const [actFilter, setActFilter] = useState<'pending' | 'approved' | 'rejected'>('pending');
   const [sellFilter, setSellFilter] = useState<'pending' | 'approved' | 'rejected'>('pending');
+  const [sellPlatformFilter, setSellPlatformFilter] = useState<'All' | 'Facebook' | 'Instagram' | 'Telegram' | 'Gmail'>('All');
   
   const [selectedUserTeam, setSelectedUserTeam] = useState<UserProfile[]>([]);
   const [showTeamModal, setShowTeamModal] = useState(false);
@@ -369,28 +370,34 @@ export function AdminPanel() {
         
         // Use price from submission if available, otherwise fallback to current settings
         let price = sell.price || 0;
+        
+        const platform = sell.type || sell.platform;
+        if (!price) {
+          switch(platform) {
+            case 'Facebook': price = socialSellSettings.facebookPrice; break;
+            case 'Instagram': price = socialSellSettings.instagramPrice; break;
+            case 'Telegram': price = socialSellSettings.telegramPrice; break;
+            case 'Gmail': price = socialSellSettings.gmailPrice; break;
+          }
+        }
+
         let balanceField = '';
         let earningsField = '';
         
-        const platform = sell.type || sell.platform;
         switch(platform) {
           case 'Facebook':
-            if (!price) price = socialSellSettings.facebookPrice;
             balanceField = 'facebookBalance';
             earningsField = 'facebookEarnings';
             break;
           case 'Instagram':
-            if (!price) price = socialSellSettings.instagramPrice;
             balanceField = 'instagramBalance';
             earningsField = 'instagramEarnings';
             break;
           case 'Telegram':
-            if (!price) price = socialSellSettings.telegramPrice;
             balanceField = 'telegramBalance';
             earningsField = 'telegramEarnings';
             break;
           case 'Gmail':
-            if (!price) price = socialSellSettings.gmailPrice;
             balanceField = 'gmailBalance';
             earningsField = 'gmailEarnings';
             break;
@@ -917,6 +924,15 @@ export function AdminPanel() {
     m.category?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const filteredSocialSells = socialSells.filter(s => 
+    s.status === sellFilter && 
+    (sellPlatformFilter === 'All' || s.platform === sellPlatformFilter) &&
+    (
+      s.userName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.platform?.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+  );
+
   const filteredActivations = activationRequests.filter(a => 
     a.status === actFilter && (
       a.userName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -1074,7 +1090,7 @@ export function AdminPanel() {
                 {tab === 'levels' && <Award className="w-4 h-4" />}
                 {tab === 'addnumber' && <Smartphone className="w-4 h-4" />}
                 {tab === 'settings' && <SettingsIcon className="w-4 h-4" />}
-                {tab === 'addnumber' ? 'Add Number' : tab}
+                {tab === 'addnumber' ? 'Add Number' : tab === 'socialsells' ? 'Social Sell' : tab}
                 {searchQuery && tab !== 'settings' && tab !== 'addnumber' && tab !== 'giftcodes' && tab !== 'levels' ? (
                   <span className={cn(
                     "ml-1 px-1.5 py-0.5 rounded-full text-[8px] font-black",
@@ -2353,28 +2369,43 @@ export function AdminPanel() {
 
           {activeTab === 'socialsells' && (
             <div className="space-y-6">
-              <div className="flex gap-2">
-                {(['pending', 'approved', 'rejected'] as const).map(f => (
-                  <button
-                    key={f}
-                    onClick={() => setSellFilter(f)}
-                    className={cn(
-                      "px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all",
-                      sellFilter === f 
-                        ? "bg-pink-500 border-pink-500 text-white" 
-                        : theme === 'dark' ? "border-[#303456] text-slate-500 hover:border-pink-500" : "border-slate-200 text-slate-400 hover:border-pink-500"
-                    )}
-                  >
-                    {f}
-                  </button>
-                ))}
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div className="flex flex-wrap gap-2">
+                  {(['pending', 'approved', 'rejected'] as const).map(f => (
+                    <button
+                      key={f}
+                      onClick={() => setSellFilter(f)}
+                      className={cn(
+                        "px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all",
+                        sellFilter === f 
+                          ? "bg-pink-500 border-pink-500 text-white" 
+                          : theme === 'dark' ? "border-[#303456] text-slate-500 hover:border-pink-500" : "border-slate-200 text-slate-400 hover:border-pink-500"
+                      )}
+                    >
+                      {f}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {(['All', 'Facebook', 'Instagram', 'Telegram', 'Gmail'] as const).map(p => (
+                    <button
+                      key={p}
+                      onClick={() => setSellPlatformFilter(p)}
+                      className={cn(
+                        "px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all",
+                        sellPlatformFilter === p 
+                          ? "bg-blue-500 border-blue-500 text-white" 
+                          : theme === 'dark' ? "border-[#303456] text-slate-500 hover:border-blue-500" : "border-slate-200 text-slate-400 hover:border-blue-500"
+                      )}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div className="grid gap-6">
-                {socialSells.filter(s => s.status === sellFilter && (
-                  s.userName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                  s.platform?.toLowerCase().includes(searchQuery.toLowerCase())
-                )).length === 0 && (
+                {filteredSocialSells.length === 0 && (
                   <div className={cn(
                     "text-center py-24 rounded-[3rem] border border-dashed text-sm font-black uppercase tracking-widest italic",
                     theme === 'dark' ? "bg-[#1a1c2e] border-[#303456] text-slate-500" : "bg-white border-slate-200 text-slate-400"
@@ -2382,29 +2413,49 @@ export function AdminPanel() {
                     No {sellFilter} sell requests found.
                   </div>
                 )}
-                {socialSells.filter(s => s.status === sellFilter && (
-                  s.userName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                  s.platform?.toLowerCase().includes(searchQuery.toLowerCase())
-                )).map(sell => (
+                {filteredSocialSells.map(sell => (
                   <div key={sell.id} className={cn(
                     "rounded-[3rem] p-10 flex flex-col lg:flex-row justify-between gap-10 border transition-all hover:shadow-2xl hover:shadow-pink-500/5",
                     theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
                   )}>
                     <div className="space-y-8 flex-1">
-                      <div className="flex items-center gap-5">
-                        <div className={cn(
-                          "w-14 h-14 rounded-[1.25rem] flex items-center justify-center border",
-                          sell.platform === 'Facebook' ? "bg-blue-600/10 border-blue-500/20 text-blue-600" :
-                          sell.platform === 'Instagram' ? "bg-pink-600/10 border-pink-500/20 text-pink-600" :
-                          "bg-sky-500/10 border-sky-500/20 text-sky-500"
-                        )}>
-                          {sell.platform === 'Facebook' && <Facebook className="w-7 h-7" />}
-                          {sell.platform === 'Instagram' && <Instagram className="w-7 h-7" />}
-                          {sell.platform === 'Telegram' && <Send className="w-7 h-7" />}
+                      <div className="flex items-center justify-between gap-5">
+                        <div className="flex items-center gap-5">
+                          <div className={cn(
+                            "w-14 h-14 rounded-[1.25rem] flex items-center justify-center border",
+                            sell.platform === 'Facebook' ? "bg-blue-600/10 border-blue-500/20 text-blue-600" :
+                            sell.platform === 'Instagram' ? "bg-pink-600/10 border-pink-500/20 text-pink-600" :
+                            "bg-sky-500/10 border-sky-500/20 text-sky-500"
+                          )}>
+                            {sell.platform === 'Facebook' && <Facebook className="w-7 h-7" />}
+                            {sell.platform === 'Instagram' && <Instagram className="w-7 h-7" />}
+                            {sell.platform === 'Telegram' && <Send className="w-7 h-7" />}
+                            {sell.platform === 'Gmail' && <Mail className="w-7 h-7" />}
+                          </div>
+                          <div>
+                            <div className="font-black text-2xl tracking-tight italic">{sell.userName || 'Anonymous'}</div>
+                            <div className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-black">Platform: {sell.platform} • ID: {sell.userSequentialId}</div>
+                          </div>
                         </div>
-                        <div>
-                          <div className="font-black text-2xl tracking-tight italic">{sell.userName || 'Anonymous'}</div>
-                          <div className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-black">Platform: {sell.platform} • ID: {sell.userSequentialId}</div>
+                        <div className="text-right flex flex-col items-end gap-2">
+                          <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Submission Rate</div>
+                          <div className="text-2xl font-black text-pink-500 tracking-tighter italic">TK {sell.price || 0}</div>
+                          <button 
+                            onClick={() => {
+                              const details = [
+                                sell.idName && `ID Name: ${sell.idName}`,
+                                sell.username && `Username: ${sell.username}`,
+                                sell.email && `Email: ${sell.email}`,
+                                sell.password && `Password: ${sell.password}`,
+                                sell.twoFactor && `2FA: ${sell.twoFactor}`
+                              ].filter(Boolean).join('\n');
+                              navigator.clipboard.writeText(details);
+                              setMessage({ type: 'success', text: 'All details copied to clipboard!' });
+                            }}
+                            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-pink-500/10 text-pink-500 text-[9px] font-black uppercase tracking-widest hover:bg-pink-500 hover:text-white transition-all"
+                          >
+                            <Copy className="w-3 h-3" /> Copy All
+                          </button>
                         </div>
                       </div>
 
@@ -2413,65 +2464,90 @@ export function AdminPanel() {
                           "p-6 rounded-[2rem] border",
                           theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
                         )}>
-                          <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Account Details</div>
-                          <div className="space-y-2">
+                          <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">Account Details</div>
+                          <div className="space-y-3">
                             {sell.idName && (
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="text-sm font-bold">ID Name: <span className="text-pink-500">{sell.idName}</span></div>
-                                <button onClick={() => { navigator.clipboard.writeText(sell.idName!); setMessage({ type: 'success', text: 'ID Name copied!' }); }} className="p-1 hover:bg-pink-500/10 rounded text-pink-500"><Copy className="w-3 h-3" /></button>
+                              <div className="flex items-center justify-between gap-4 p-2 rounded-xl bg-slate-500/5">
+                                <div className="text-xs font-bold text-slate-500 uppercase">ID Name</div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-black">{sell.idName}</span>
+                                  <button onClick={() => { navigator.clipboard.writeText(sell.idName!); setMessage({ type: 'success', text: 'ID Name copied!' }); }} className="p-1.5 hover:bg-pink-500/10 rounded-lg text-pink-500 transition-colors"><Copy className="w-3.5 h-3.5" /></button>
+                                </div>
                               </div>
                             )}
                             {sell.username && (
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="text-sm font-bold">Username: <span className="text-pink-500">{sell.username}</span></div>
-                                <button onClick={() => { navigator.clipboard.writeText(sell.username!); setMessage({ type: 'success', text: 'Username copied!' }); }} className="p-1 hover:bg-pink-500/10 rounded text-pink-500"><Copy className="w-3 h-3" /></button>
+                              <div className="flex items-center justify-between gap-4 p-2 rounded-xl bg-slate-500/5">
+                                <div className="text-xs font-bold text-slate-500 uppercase">Username</div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-black">{sell.username}</span>
+                                  <button onClick={() => { navigator.clipboard.writeText(sell.username!); setMessage({ type: 'success', text: 'Username copied!' }); }} className="p-1.5 hover:bg-pink-500/10 rounded-lg text-pink-500 transition-colors"><Copy className="w-3.5 h-3.5" /></button>
+                                </div>
                               </div>
                             )}
                             {sell.email && (
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="text-sm font-bold">Email/Gmail: <span className="text-pink-500">{sell.email}</span></div>
-                                <button onClick={() => { navigator.clipboard.writeText(sell.email!); setMessage({ type: 'success', text: 'Email copied!' }); }} className="p-1 hover:bg-pink-500/10 rounded text-pink-500"><Copy className="w-3 h-3" /></button>
+                              <div className="flex items-center justify-between gap-4 p-2 rounded-xl bg-slate-500/5">
+                                <div className="text-xs font-bold text-slate-500 uppercase">Email/Gmail</div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-black">{sell.email}</span>
+                                  <button onClick={() => { navigator.clipboard.writeText(sell.email!); setMessage({ type: 'success', text: 'Email copied!' }); }} className="p-1.5 hover:bg-pink-500/10 rounded-lg text-pink-500 transition-colors"><Copy className="w-3.5 h-3.5" /></button>
+                                </div>
                               </div>
                             )}
                             {sell.password && (
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="text-sm font-bold">Password: <span className="text-pink-500">{sell.password}</span></div>
-                                <button onClick={() => { navigator.clipboard.writeText(sell.password!); setMessage({ type: 'success', text: 'Password copied!' }); }} className="p-1 hover:bg-pink-500/10 rounded text-pink-500"><Copy className="w-3 h-3" /></button>
+                              <div className="flex items-center justify-between gap-4 p-2 rounded-xl bg-slate-500/5">
+                                <div className="text-xs font-bold text-slate-500 uppercase">Password</div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-black">{sell.password}</span>
+                                  <button onClick={() => { navigator.clipboard.writeText(sell.password!); setMessage({ type: 'success', text: 'Password copied!' }); }} className="p-1.5 hover:bg-pink-500/10 rounded-lg text-pink-500 transition-colors"><Copy className="w-3.5 h-3.5" /></button>
+                                </div>
                               </div>
                             )}
                             {sell.twoFactor && (
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="text-sm font-bold">2FA: <span className="text-pink-500">{sell.twoFactor}</span></div>
-                                <button onClick={() => { navigator.clipboard.writeText(sell.twoFactor!); setMessage({ type: 'success', text: '2FA copied!' }); }} className="p-1 hover:bg-pink-500/10 rounded text-pink-500"><Copy className="w-3 h-3" /></button>
+                              <div className="flex items-center justify-between gap-4 p-2 rounded-xl bg-slate-500/5">
+                                <div className="text-xs font-bold text-slate-500 uppercase">2FA Code</div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-black">{sell.twoFactor}</span>
+                                  <button onClick={() => { navigator.clipboard.writeText(sell.twoFactor!); setMessage({ type: 'success', text: '2FA copied!' }); }} className="p-1.5 hover:bg-pink-500/10 rounded-lg text-pink-500 transition-colors"><Copy className="w-3.5 h-3.5" /></button>
+                                </div>
                               </div>
                             )}
                           </div>
                         </div>
+                        <div className="flex flex-col justify-between p-6">
+                          <div className="space-y-4">
+                            <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                              <Clock className="w-3 h-3" /> Submitted: {new Date(sell.submittedAt).toLocaleString()}
+                            </div>
+                            {sell.status !== 'pending' && (
+                              <div className={cn(
+                                "inline-flex items-center gap-2 px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest",
+                                sell.status === 'approved' ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500"
+                              )}>
+                                {sell.status === 'approved' ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+                                {sell.status}
+                              </div>
+                            )}
+                          </div>
+                          
+                          {sell.status === 'pending' && (
+                            <div className="flex gap-3 mt-6">
+                              <button 
+                                onClick={() => handleApproveSocialSell(sell)}
+                                className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl shadow-emerald-500/20 transition-all active:scale-95 flex items-center justify-center gap-2"
+                              >
+                                <CheckCircle2 className="w-4 h-4" /> Approve
+                              </button>
+                              <button 
+                                onClick={() => handleRejectSocialSell(sell.id)}
+                                className="flex-1 bg-rose-500 hover:bg-rose-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl shadow-rose-500/20 transition-all active:scale-95 flex items-center justify-center gap-2"
+                              >
+                                <XCircle className="w-4 h-4" /> Reject
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
-
-                    {sell.status === 'pending' && (
-                      <div className="flex flex-row lg:flex-col gap-3 justify-center">
-                        <button 
-                          onClick={() => handleApproveSocialSell(sell)}
-                          className="px-8 py-4 bg-emerald-500 text-white rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl shadow-emerald-500/20 transition-all hover:scale-105 active:scale-95 flex items-center gap-2"
-                        >
-                          <CheckCircle2 className="w-4 h-4" /> Approve
-                        </button>
-                        <button 
-                          onClick={() => handleRejectSocialSell(sell.id)}
-                          className="px-8 py-4 bg-rose-500 text-white rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl shadow-rose-500/20 transition-all hover:scale-105 active:scale-95 flex items-center gap-2"
-                        >
-                          <XCircle className="w-4 h-4" /> Reject
-                        </button>
-                        <button 
-                          onClick={() => handleSendNotification(sell.userId)}
-                          className="px-8 py-4 bg-blue-500 text-white rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl shadow-blue-500/20 transition-all hover:scale-105 active:scale-95 flex items-center gap-2"
-                        >
-                          <MessageCircle className="w-4 h-4" /> Notify
-                        </button>
-                      </div>
-                    )}
                   </div>
                 ))}
               </div>

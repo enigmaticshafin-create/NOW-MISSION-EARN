@@ -3,9 +3,10 @@ import { useTheme } from '../context/ThemeContext';
 import { Facebook, Send, Instagram, Mail, CheckCircle2, AlertCircle, Loader2, ChevronRight, ShieldCheck, Copy } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../hooks/useAuth';
-import { db } from '../firebase';
-import { collection, addDoc, doc, getDoc } from 'firebase/firestore';
+import { db, auth } from '../firebase';
+import { collection, addDoc, doc, getDoc, runTransaction, increment } from 'firebase/firestore';
 import { SocialSellSettings } from '../types';
+import { handleFirestoreError, OperationType } from '../lib/firestore-errors';
 
 interface SellPageProps {
   type: 'Facebook' | 'Telegram' | 'Instagram' | 'Gmail';
@@ -148,29 +149,65 @@ export default function SellPage({ type }: SellPageProps) {
     setMessage(null);
 
     try {
+      const isAdmin = ['admin', 'moderator', 'ceo'].includes(profile.role);
+      const status = isAdmin ? 'approved' : 'pending';
+      
       const submissionData: any = {
         userId: user.uid,
-        userName: profile.userName,
-        userSequentialId: profile.userId,
+        userName: profile.userName || user.displayName || user.email?.split('@')[0] || 'User',
+        userSequentialId: profile.userId || '000000',
         type,
         platform: type,
-        price: currentPrice,
-        status: 'pending',
+        price: currentPrice || 0,
+        status,
         submittedAt: new Date().toISOString()
       };
 
       if (type === 'Facebook' || type === 'Instagram') {
-        submissionData.email = form.email;
-        submissionData.password = form.password;
-        submissionData.twoFactor = form.twoFactor;
+        submissionData.email = form.email || '';
+        submissionData.password = form.password || '';
+        submissionData.twoFactor = form.twoFactor || '';
       } else if (type === 'Gmail') {
-        submissionData.email = form.email;
-        submissionData.password = form.password;
+        submissionData.email = form.email || '';
+        submissionData.password = form.password || '';
       }
 
-      await addDoc(collection(db, 'socialSells'), submissionData);
-
-      setMessage({ type: 'success', text: 'Your sell request has been submitted for review! (আপনার বিক্রয় অনুরোধটি পর্যালোচনার জন্য জমা দেওয়া হয়েছে!)' });
+      if (isAdmin) {
+        await runTransaction(db, async (transaction) => {
+          const userRef = doc(db, 'users', user.uid);
+          const userSnap = await transaction.get(userRef);
+          
+          if (!userSnap.exists()) throw new Error("User profile not found");
+          
+          const newSellRef = doc(collection(db, 'socialSells'));
+          transaction.set(newSellRef, submissionData);
+          
+          const price = currentPrice || 0;
+          let balanceField = '';
+          let earningsField = '';
+          
+          switch(type) {
+            case 'Facebook': balanceField = 'facebookBalance'; earningsField = 'facebookEarnings'; break;
+            case 'Instagram': balanceField = 'instagramBalance'; earningsField = 'instagramEarnings'; break;
+            case 'Telegram': balanceField = 'telegramBalance'; earningsField = 'telegramEarnings'; break;
+            case 'Gmail': balanceField = 'gmailBalance'; earningsField = 'gmailEarnings'; break;
+          }
+          
+          const updates: any = {
+            balance: increment(price),
+            totalEarned: increment(price)
+          };
+          
+          if (balanceField) updates[balanceField] = increment(price);
+          if (earningsField) updates[earningsField] = increment(price);
+          
+          transaction.update(userRef, updates);
+        });
+        setMessage({ type: 'success', text: 'Admin submission auto-approved and balance updated!' });
+      } else {
+        await addDoc(collection(db, 'socialSells'), submissionData);
+        setMessage({ type: 'success', text: 'Your sell request has been submitted for review! (আপনার বিক্রয় অনুরোধটি পর্যালোচনার জন্য জমা দেওয়া হয়েছে!)' });
+      }
       setForm({
         email: '',
         password: settings?.adminPassword || '',
@@ -180,6 +217,16 @@ export default function SellPage({ type }: SellPageProps) {
       });
     } catch (error) {
       console.error('Error submitting sell request:', error);
+      try {
+        handleFirestoreError(error, OperationType.WRITE, 'socialSells');
+      } catch (detailedError: any) {
+        const errorData = JSON.parse(detailedError.message);
+        setMessage({ 
+          type: 'error', 
+          text: `Submission failed: ${errorData.error}. Please contact support.` 
+        });
+        return;
+      }
       setMessage({ type: 'error', text: 'Failed to submit request. Please try again. (অনুরোধ জমা দিতে ব্যর্থ হয়েছে। আবার চেষ্টা করুন।)' });
     } finally {
       setIsSubmitting(false);
