@@ -117,6 +117,30 @@ export function Dashboard() {
   const [showLearnIncomeModal, setShowLearnIncomeModal] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [latestActivationRequest, setLatestActivationRequest] = useState<ActivationRequest | null>(null);
+  const [teamLeader, setTeamLeader] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchTeamLeader = async () => {
+      if (profile?.referredBy) {
+        try {
+          // Look up by 8-digit ID
+          const lookupRef = doc(db, 'referral_lookup', profile.referredBy);
+          const lookupSnap = await getDoc(lookupRef);
+          
+          if (lookupSnap.exists()) {
+            const leaderUid = lookupSnap.data().uid;
+            const leaderSnap = await getDoc(doc(db, 'users', leaderUid));
+            if (leaderSnap.exists()) {
+              setTeamLeader(leaderSnap.data());
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching team leader:", error);
+        }
+      }
+    };
+    fetchTeamLeader();
+  }, [profile?.referredBy]);
 
   useEffect(() => {
     if (!user) return;
@@ -649,6 +673,36 @@ export function Dashboard() {
           >
             সাপোর্টে যোগাযোগ করুন
           </a>
+        </div>
+      )}
+
+      {/* Team Leader Section */}
+      {teamLeader && (
+        <div className={cn(
+          "rounded-[2rem] p-8 border flex flex-col sm:flex-row items-center justify-between gap-6",
+          theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
+        )}>
+          <div className="flex items-center gap-6">
+            <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-600/20">
+              <ShieldCheck className="w-8 h-8 text-white" />
+            </div>
+            <div>
+              <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">আপনার টিম লিডার</p>
+              <h3 className="text-2xl font-black tracking-tight italic uppercase">{teamLeader.userName}</h3>
+              <p className="text-blue-500 font-black text-sm uppercase tracking-widest">
+                User ID: {teamLeader.userId}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="text-right hidden sm:block">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Status</p>
+              <p className="text-sm font-black text-emerald-500 uppercase tracking-tight">Verified Leader</p>
+            </div>
+            <div className="w-12 h-12 bg-emerald-500/10 rounded-xl flex items-center justify-center">
+              <CheckCircle2 className="w-6 h-6 text-emerald-500" />
+            </div>
+          </div>
         </div>
       )}
 

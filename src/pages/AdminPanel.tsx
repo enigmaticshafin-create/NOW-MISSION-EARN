@@ -457,6 +457,58 @@ export function AdminPanel() {
     }
   };
 
+  const handleSetPendingSocialSell = async (sell: SocialSellSubmission) => {
+    if (!window.confirm('Set this sell request back to pending?')) return;
+    try {
+      await runTransaction(db, async (transaction) => {
+        const sellRef = doc(db, 'socialSells', sell.id);
+        const userRef = doc(db, 'users', sell.userId);
+        
+        const userSnap = await transaction.get(userRef);
+        if (!userSnap.exists()) throw new Error('User not found');
+        
+        // If it was approved, we need to reverse the balance
+        if (sell.status === 'approved') {
+          let price = sell.price || 0;
+          const platform = sell.type || sell.platform;
+          if (!price) {
+            switch(platform) {
+              case 'Facebook': price = socialSellSettings.facebookPrice; break;
+              case 'Instagram': price = socialSellSettings.instagramPrice; break;
+              case 'Telegram': price = socialSellSettings.telegramPrice; break;
+              case 'Gmail': price = socialSellSettings.gmailPrice; break;
+            }
+          }
+
+          let balanceField = '';
+          let earningsField = '';
+          
+          switch(platform) {
+            case 'Facebook': balanceField = 'facebookBalance'; earningsField = 'facebookEarnings'; break;
+            case 'Instagram': balanceField = 'instagramBalance'; earningsField = 'instagramEarnings'; break;
+            case 'Telegram': balanceField = 'telegramBalance'; earningsField = 'telegramEarnings'; break;
+            case 'Gmail': balanceField = 'gmailBalance'; earningsField = 'gmailEarnings'; break;
+          }
+
+          const updates: any = {
+            balance: increment(-price),
+            totalEarned: increment(-price)
+          };
+          
+          if (balanceField) updates[balanceField] = increment(-price);
+          if (earningsField) updates[earningsField] = increment(-price);
+          
+          transaction.update(userRef, updates);
+        }
+        
+        transaction.update(sellRef, { status: 'pending' });
+      });
+      setMessage({ type: 'success', text: 'Sell request set back to pending.' });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `socialSells/${sell.id}`);
+    }
+  };
+
   const handleAddMission = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -582,6 +634,29 @@ export function AdminPanel() {
     }
   };
 
+  const handleSetPendingSubmission = async (submission: MissionSubmission) => {
+    if (!window.confirm('Set this submission back to pending?')) return;
+    try {
+      await runTransaction(db, async (transaction) => {
+        const subRef = doc(db, 'missionSubmissions', submission.id);
+        const userRef = doc(db, 'users', submission.userId);
+        
+        if (submission.status === 'approved') {
+          const reward = submission.reward || 0;
+          transaction.update(userRef, { 
+            balance: increment(-reward),
+            totalEarned: increment(-reward)
+          });
+        }
+        
+        transaction.update(subRef, { status: 'pending' });
+      });
+      setMessage({ type: 'success', text: 'Submission set back to pending.' });
+    } catch (error) {
+      console.error("Set pending error:", error);
+    }
+  };
+
   const handleCompleteWithdrawal = async (withdrawal: Withdrawal) => {
     try {
       await runTransaction(db, async (transaction) => {
@@ -616,6 +691,30 @@ export function AdminPanel() {
     }
   };
 
+  const handleSetPendingWithdrawal = async (withdrawal: Withdrawal) => {
+    if (!window.confirm('Set this withdrawal back to pending?')) return;
+    try {
+      await runTransaction(db, async (transaction) => {
+        const withdrawalRef = doc(db, 'withdrawals', withdrawal.id);
+        const userRef = doc(db, 'users', withdrawal.userId);
+        
+        if (withdrawal.status === 'completed') {
+          transaction.update(userRef, { 
+            totalWithdraw: increment(-withdrawal.amount) 
+          });
+        } else if (withdrawal.status === 'rejected') {
+          // If it was rejected, the balance was refunded. We need to deduct it again.
+          transaction.update(userRef, { balance: increment(-withdrawal.amount) });
+        }
+        
+        transaction.update(withdrawalRef, { status: 'pending' });
+      });
+      setMessage({ type: 'success', text: 'Withdrawal set back to pending.' });
+    } catch (error) {
+      console.error("Set pending withdrawal error:", error);
+    }
+  };
+
   const handleApproveDeposit = async (request: DepositRequest) => {
     try {
       await runTransaction(db, async (transaction) => {
@@ -643,6 +742,28 @@ export function AdminPanel() {
       setMessage({ type: 'success', text: 'Deposit rejected!' });
     } catch (error) {
       console.error("Reject deposit error:", error);
+    }
+  };
+
+  const handleSetPendingDeposit = async (request: DepositRequest) => {
+    if (!window.confirm('Set this deposit request back to pending?')) return;
+    try {
+      await runTransaction(db, async (transaction) => {
+        const depositRef = doc(db, 'deposits', request.id);
+        const userRef = doc(db, 'users', request.userId);
+        
+        if (request.status === 'approved') {
+          transaction.update(userRef, { 
+            balance: increment(-request.amount),
+            totalEarned: increment(-request.amount)
+          });
+        }
+        
+        transaction.update(depositRef, { status: 'pending' });
+      });
+      setMessage({ type: 'success', text: 'Deposit request set back to pending.' });
+    } catch (error) {
+      console.error("Set pending deposit error:", error);
     }
   };
 
@@ -703,7 +824,11 @@ export function AdminPanel() {
     }
   };
 
+  const [isProcessing, setIsProcessing] = useState<string | null>(null);
+
   const handleApproveActivation = async (act: ActivationRequest) => {
+    if (isProcessing === act.id) return;
+    setIsProcessing(act.id);
     try {
       await runTransaction(db, async (transaction) => {
         const reqRef = doc(db, 'activationRequests', act.id);
@@ -720,6 +845,10 @@ export function AdminPanel() {
         }
         
         const userData = userSnap.data();
+        if (userData.status === 'active') {
+          throw new Error('User is already active.');
+        }
+        
         const referrerId = userData.referredBy;
         
         let referrerUid = null;
@@ -764,6 +893,36 @@ export function AdminPanel() {
       console.error("Approve activation error:", error);
       handleFirestoreError(error, OperationType.UPDATE, `activationRequests/${act.id}`);
       setMessage({ type: 'error', text: 'Failed to approve activation.' });
+    } finally {
+      setIsProcessing(null);
+    }
+  };
+
+  const handleResetLeaderboard = async () => {
+    if (profile?.role !== 'ceo') {
+      setMessage({ type: 'error', text: "Only the CEO can reset the leaderboard." });
+      return;
+    }
+    if (!window.confirm('Are you sure you want to RESET the leaderboard? This will set all users\' referral counts to 0. This action cannot be undone.')) return;
+    
+    setIsSubmitting(true);
+    try {
+      const usersSnap = await getDocs(collection(db, 'users'));
+      const batch = writeBatch(db);
+      
+      usersSnap.docs.forEach((userDoc) => {
+        batch.update(userDoc.ref, { 
+          referrals: 0
+        });
+      });
+      
+      await batch.commit();
+      setMessage({ type: 'success', text: 'Leaderboard reset successfully!' });
+    } catch (error) {
+      console.error("Reset leaderboard error:", error);
+      setMessage({ type: 'error', text: 'Failed to reset leaderboard.' });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -1005,6 +1164,13 @@ export function AdminPanel() {
                   Migrate All IDs
                 </button>
                 <button 
+                  onClick={handleResetLeaderboard}
+                  className="text-[10px] bg-rose-500/10 text-rose-500 px-3 py-1 rounded-full font-black tracking-widest hover:bg-rose-500 hover:text-white transition-all flex items-center gap-1"
+                >
+                  <History className="w-3 h-3" />
+                  Reset Leaderboard
+                </button>
+                <button 
                   onClick={handleDeactivateAll}
                   className="text-[10px] bg-rose-500/10 text-rose-500 px-3 py-1 rounded-full font-black tracking-widest hover:bg-rose-500 hover:text-white transition-all flex items-center gap-1"
                 >
@@ -1234,6 +1400,23 @@ export function AdminPanel() {
                         <span className="flex items-center gap-2"><Clock className="w-3 h-3" /> {new Date(sub.submittedAt).toLocaleString()}</span>
                         <span className="flex items-center gap-2 text-emerald-500"><TrendingUp className="w-3 h-3" /> Reward: ${sub.reward}</span>
                       </div>
+                      {sub.status !== 'pending' && (
+                        <div className="flex items-center gap-3 mt-4">
+                          <div className={cn(
+                            "px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest",
+                            sub.status === 'approved' ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500"
+                          )}>
+                            {sub.status}
+                          </div>
+                          <button 
+                            onClick={() => handleSetPendingSubmission(sub)}
+                            className="p-2 hover:bg-slate-500/10 rounded-lg text-slate-500 transition-colors"
+                            title="Set back to pending"
+                          >
+                            <Clock className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                     {sub.status === 'pending' && (
                       <div className="flex flex-row lg:flex-col gap-4 justify-center flex-wrap">
@@ -1329,20 +1512,49 @@ export function AdminPanel() {
                         </div>
                       </div>
                     </div>
+                    {w.status !== 'pending' && (
+                      <div className="flex flex-col items-end gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className={cn(
+                            "px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest",
+                            w.status === 'completed' ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500"
+                          )}>
+                            {w.status}
+                          </div>
+                          <button 
+                            onClick={() => handleSetPendingWithdrawal(w)}
+                            className="p-2 hover:bg-slate-500/10 rounded-lg text-slate-500 transition-colors"
+                            title="Set back to pending"
+                          >
+                            <Clock className="w-4 h-4" />
+                          </button>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Requested At</div>
+                          <div className="text-sm font-black">{new Date(w.requestedAt).toLocaleString()}</div>
+                        </div>
+                      </div>
+                    )}
                     {w.status === 'pending' && (
-                      <div className="flex flex-row lg:flex-col gap-4 w-full lg:w-auto flex-wrap">
-                        <button 
-                          onClick={() => handleCompleteWithdrawal(w)}
-                          className="flex-1 lg:flex-none bg-emerald-500 hover:bg-emerald-600 text-white px-10 py-5 rounded-[1.5rem] font-black uppercase tracking-widest transition-all active:scale-95 shadow-xl shadow-emerald-500/20"
-                        >
-                          Complete
-                        </button>
-                        <button 
-                          onClick={() => handleRejectWithdrawal(w)}
-                          className="flex-1 lg:flex-none bg-rose-500 hover:bg-rose-600 text-white px-10 py-5 rounded-[1.5rem] font-black uppercase tracking-widest transition-all active:scale-95 shadow-xl shadow-rose-500/20 flex items-center justify-center gap-2"
-                        >
-                          <X className="w-5 h-5" /> Reject
-                        </button>
+                      <div className="flex flex-col items-end gap-3">
+                        <div className="text-right">
+                          <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Requested At</div>
+                          <div className="text-sm font-black">{new Date(w.requestedAt).toLocaleString()}</div>
+                        </div>
+                        <div className="flex flex-row lg:flex-col gap-4 w-full lg:w-auto flex-wrap">
+                          <button 
+                            onClick={() => handleCompleteWithdrawal(w)}
+                            className="flex-1 lg:flex-none bg-emerald-500 hover:bg-emerald-600 text-white px-10 py-5 rounded-[1.5rem] font-black uppercase tracking-widest transition-all active:scale-95 shadow-xl shadow-emerald-500/20"
+                          >
+                            Complete
+                          </button>
+                          <button 
+                            onClick={() => handleRejectWithdrawal(w)}
+                            className="flex-1 lg:flex-none bg-rose-500 hover:bg-rose-600 text-white px-10 py-5 rounded-[1.5rem] font-black uppercase tracking-widest transition-all active:scale-95 shadow-xl shadow-rose-500/20 flex items-center justify-center gap-2"
+                          >
+                            <X className="w-5 h-5" /> Reject
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1425,6 +1637,15 @@ export function AdminPanel() {
                             <X className="w-5 h-5" />
                           </button>
                         </>
+                      )}
+                      {d.status !== 'pending' && (
+                        <button 
+                          onClick={() => handleSetPendingDeposit(d)}
+                          className="p-4 rounded-2xl bg-slate-500/10 text-slate-500 hover:bg-slate-500 hover:text-white transition-all"
+                          title="Set back to pending"
+                        >
+                          <Clock className="w-5 h-5" />
+                        </button>
                       )}
                     </div>
                   </div>
@@ -1557,14 +1778,22 @@ export function AdminPanel() {
                       <div className="flex lg:flex-col gap-4 justify-center">
                         <button 
                           onClick={() => handleApproveActivation(act)}
-                          className="bg-emerald-500 hover:bg-emerald-600 text-white p-6 rounded-[1.5rem] transition-all active:scale-95 shadow-xl shadow-emerald-500/20"
+                          disabled={isProcessing === act.id}
+                          className={cn(
+                            "bg-emerald-500 hover:bg-emerald-600 text-white p-6 rounded-[1.5rem] transition-all active:scale-95 shadow-xl shadow-emerald-500/20",
+                            isProcessing === act.id && "opacity-50 cursor-not-allowed"
+                          )}
                           title="Approve Activation"
                         >
-                          <Check className="w-8 h-8" />
+                          {isProcessing === act.id ? <Loader2 className="w-8 h-8 animate-spin" /> : <Check className="w-8 h-8" />}
                         </button>
                         <button 
                           onClick={() => handleRejectActivation(act.id, act.userId)}
-                          className="bg-rose-500 hover:bg-rose-600 text-white p-6 rounded-[1.5rem] transition-all active:scale-95 shadow-xl shadow-rose-500/20"
+                          disabled={isProcessing === act.id}
+                          className={cn(
+                            "bg-rose-500 hover:bg-rose-600 text-white p-6 rounded-[1.5rem] transition-all active:scale-95 shadow-xl shadow-rose-500/20",
+                            isProcessing === act.id && "opacity-50 cursor-not-allowed"
+                          )}
                           title="Reject Activation"
                         >
                           <X className="w-8 h-8" />
@@ -1580,6 +1809,18 @@ export function AdminPanel() {
                           title="Reactivate Request"
                         >
                           <History className="w-8 h-8" />
+                        </button>
+                      </div>
+                    )}
+
+                    {act.status === 'approved' && (
+                      <div className="flex lg:flex-col gap-4 justify-center">
+                        <button 
+                          onClick={() => handleReactivateActivation(act.id, act.userId)}
+                          className="bg-slate-500 hover:bg-slate-600 text-white p-6 rounded-[1.5rem] transition-all active:scale-95 shadow-xl shadow-slate-500/20"
+                          title="Set back to pending"
+                        >
+                          <Clock className="w-8 h-8" />
                         </button>
                       </div>
                     )}
@@ -2519,12 +2760,21 @@ export function AdminPanel() {
                               <Clock className="w-3 h-3" /> Submitted: {new Date(sell.submittedAt).toLocaleString()}
                             </div>
                             {sell.status !== 'pending' && (
-                              <div className={cn(
-                                "inline-flex items-center gap-2 px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest",
-                                sell.status === 'approved' ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500"
-                              )}>
-                                {sell.status === 'approved' ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
-                                {sell.status}
+                              <div className="flex items-center gap-3">
+                                <div className={cn(
+                                  "inline-flex items-center gap-2 px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest",
+                                  sell.status === 'approved' ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500"
+                                )}>
+                                  {sell.status === 'approved' ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+                                  {sell.status}
+                                </div>
+                                <button 
+                                  onClick={() => handleSetPendingSocialSell(sell)}
+                                  className="p-2 hover:bg-slate-500/10 rounded-lg text-slate-500 transition-colors"
+                                  title="Set back to pending"
+                                >
+                                  <Clock className="w-4 h-4" />
+                                </button>
                               </div>
                             )}
                           </div>

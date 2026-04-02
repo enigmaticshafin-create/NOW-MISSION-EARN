@@ -140,7 +140,8 @@ export default function Leaderboard() {
                 <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-white text-slate-900 rounded-full flex items-center justify-center font-black text-xs border-2 border-slate-300 shadow-lg">2</div>
               </div>
               <div className="space-y-1">
-                <p className="font-black text-sm truncate px-2">{currentData[1].userName}</p>
+                <p className="font-black text-sm truncate px-2 text-slate-400">{currentData[1].userName}</p>
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">ID: {currentData[1].userId}</p>
                 <p className="text-xs font-bold text-slate-500">
                   {activeTab === 'referrers' ? `${currentData[1].referrals} রেফার` : `BDT ${currentData[1].totalWithdraw?.toFixed(0)}`}
                 </p>
@@ -159,7 +160,8 @@ export default function Leaderboard() {
                 <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-white text-slate-900 rounded-full flex items-center justify-center font-black text-sm border-4 border-yellow-400 shadow-xl">1</div>
               </div>
               <div className="space-y-1">
-                <p className="font-black text-lg truncate px-2 bg-gradient-to-r from-yellow-500 to-amber-600 bg-clip-text text-transparent">{currentData[0].userName}</p>
+                <p className="font-black text-lg truncate px-2 text-yellow-500">{currentData[0].userName}</p>
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">ID: {currentData[0].userId}</p>
                 <p className="text-sm font-black text-pink-500">
                   {activeTab === 'referrers' ? `${currentData[0].referrals} রেফার` : `BDT ${currentData[0].totalWithdraw?.toFixed(0)}`}
                 </p>
@@ -178,7 +180,8 @@ export default function Leaderboard() {
                 <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-white text-slate-900 rounded-full flex items-center justify-center font-black text-xs border-2 border-amber-600 shadow-lg">3</div>
               </div>
               <div className="space-y-1">
-                <p className="font-black text-sm truncate px-2">{currentData[2].userName}</p>
+                <p className="font-black text-sm truncate px-2 text-amber-700">{currentData[2].userName}</p>
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">ID: {currentData[2].userId}</p>
                 <p className="text-xs font-bold text-slate-500">
                   {activeTab === 'referrers' ? `${currentData[2].referrals} রেফার` : `BDT ${currentData[2].totalWithdraw?.toFixed(0)}`}
                 </p>
