@@ -142,7 +142,7 @@ export function AdminPanel() {
       }
     });
 
-    const unsubWithdrawals = onSnapshot(query(collection(db, 'withdrawals'), orderBy('requestedAt', 'desc')), (snap) => {
+    const unsubWithdrawals = onSnapshot(query(collection(db, 'withdrawals'), orderBy('submittedAt', 'desc')), (snap) => {
       setWithdrawals(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Withdrawal)));
     }, (error) => {
       if (auth.currentUser) {
@@ -1531,7 +1531,7 @@ export function AdminPanel() {
                         </div>
                         <div className="text-right">
                           <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Requested At</div>
-                          <div className="text-sm font-black">{new Date(w.requestedAt).toLocaleString()}</div>
+                          <div className="text-sm font-black">{new Date(w.submittedAt).toLocaleString()}</div>
                         </div>
                       </div>
                     )}
@@ -1539,7 +1539,7 @@ export function AdminPanel() {
                       <div className="flex flex-col items-end gap-3">
                         <div className="text-right">
                           <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Requested At</div>
-                          <div className="text-sm font-black">{new Date(w.requestedAt).toLocaleString()}</div>
+                          <div className="text-sm font-black">{new Date(w.submittedAt).toLocaleString()}</div>
                         </div>
                         <div className="flex flex-row lg:flex-col gap-4 w-full lg:w-auto flex-wrap">
                           <button 

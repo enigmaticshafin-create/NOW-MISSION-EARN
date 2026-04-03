@@ -158,7 +158,7 @@ export const Profile: React.FC = () => {
           method: method,
           paymentNumber: paymentNumber,
           status: 'pending',
-          requestedAt: new Date().toISOString(),
+          submittedAt: new Date().toISOString(),
         });
 
         transaction.update(userRef, { balance: increment(-withdrawAmount) });
@@ -448,7 +448,7 @@ export const Profile: React.FC = () => {
                   </div>
                   <div>
                     <div className="font-black text-sm uppercase tracking-tight">Withdrawal</div>
-                    <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{new Date(w.requestedAt).toLocaleDateString()}</div>
+                    <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{new Date(w.submittedAt).toLocaleDateString()}</div>
                   </div>
                 </div>
                 <div className="text-right">

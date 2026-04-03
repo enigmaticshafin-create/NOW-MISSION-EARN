@@ -15,7 +15,8 @@ import {
   Smartphone,
   CreditCard,
   Banknote,
-  Info
+  Info,
+  History
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useNavigate } from 'react-router-dom';
@@ -224,6 +225,21 @@ export default function Withdraw() {
             )}
           </button>
         </form>
+
+        <div className="pt-4 border-t border-slate-500/10">
+          <button
+            onClick={() => navigate('/withdraw-history')}
+            className={cn(
+              "w-full py-4 rounded-2xl font-black uppercase tracking-widest border-2 transition-all flex items-center justify-center gap-3",
+              theme === 'dark' 
+                ? "border-[#303456] text-slate-400 hover:bg-[#252841] hover:text-white" 
+                : "border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+            )}
+          >
+            <History className="w-5 h-5" />
+            উত্তোলন ইতিহাস দেখুন
+          </button>
+        </div>
       </div>
       {/* Toast Message */}
       {message && (

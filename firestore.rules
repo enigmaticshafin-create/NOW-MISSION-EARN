@@ -93,7 +93,8 @@ service cloud.firestore {
              (!('createdAt' in data) || isValidDateString(data.createdAt)) &&
              (!('totalEarned' in data) || data.totalEarned is number) &&
              (!('inviteEarnings' in data) || data.inviteEarnings is number) &&
-             (!('referrals' in data) || data.referrals is number);
+             (!('referrals' in data) || data.referrals is number) &&
+             (!('totalWithdraw' in data) || data.totalWithdraw is number);
     }
 
     function isValidMission(data) {
@@ -121,7 +122,10 @@ service cloud.firestore {
              data.amount is number && data.amount > 0 &&
              data.status in ['pending', 'completed', 'rejected'] &&
              data.method is string && data.method.size() > 0 && data.method.size() < 1000 &&
-             isValidDateString(data.submittedAt);
+             isValidDateString(data.submittedAt) &&
+             (!('userName' in data) || (data.userName is string && data.userName.size() < 100)) &&
+             (!('userSequentialId' in data) || (data.userSequentialId is string && data.userSequentialId.size() < 50)) &&
+             (!('paymentNumber' in data) || (data.paymentNumber is string && data.paymentNumber.size() < 30));
     }
 
     function isValidActivationRequest(data) {
@@ -160,9 +164,14 @@ service cloud.firestore {
                      request.resource.data.email == resource.data.email) ||
                     (isOwner(userId) && isValidUser(request.resource.data) && 
                      request.resource.data.role == resource.data.role && 
-                     request.resource.data.balance == resource.data.balance &&
+                     request.resource.data.balance <= resource.data.balance &&
                      request.resource.data.userId == resource.data.userId &&
                      request.resource.data.referralCode == resource.data.referralCode &&
+                     request.resource.data.email == resource.data.email &&
+                     (!('totalWithdraw' in resource.data) || request.resource.data.totalWithdraw == resource.data.totalWithdraw) &&
+                     (!('totalEarned' in resource.data) || request.resource.data.totalEarned == resource.data.totalEarned) &&
+                     (!('inviteEarnings' in resource.data) || request.resource.data.inviteEarnings == resource.data.inviteEarnings) &&
+                     (!('referrals' in resource.data) || request.resource.data.referrals == resource.data.referrals) &&
                      (request.resource.data.status == resource.data.status || 
                       (resource.data.status == 'inactive' && request.resource.data.status == 'pending')));
     }

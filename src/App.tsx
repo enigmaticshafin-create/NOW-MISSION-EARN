@@ -20,6 +20,7 @@ import HelpLine from './pages/HelpLine';
 import Wallet from './pages/Wallet';
 import Deposit from './pages/Deposit';
 import Withdraw from './pages/Withdraw';
+import WithdrawHistory from './pages/WithdrawHistory';
 import { Landing } from './pages/Landing';
 import { Logo } from './components/Logo';
 import { useAuth } from './hooks/useAuth';
@@ -107,6 +108,7 @@ function AppContent() {
       { name: 'Wallet', icon: WalletIcon, path: '/wallet' },
       { name: 'Deposit', icon: ArrowDownCircle, path: '/deposit' },
       { name: 'Withdraw', icon: ArrowUpCircle, path: '/withdraw' },
+      { name: 'Withdraw History', icon: History, path: '/withdraw-history' },
     ]},
     { group: 'Sell', items: [
       { name: 'Gmail Sell', icon: Mail, path: '/gmail-sell' },
@@ -322,6 +324,7 @@ function AppContent() {
             <Route path="/wallet" element={user ? <Wallet /> : <Navigate to="/login" />} />
             <Route path="/deposit" element={user ? <Deposit /> : <Navigate to="/login" />} />
             <Route path="/withdraw" element={user ? <Withdraw /> : <Navigate to="/login" />} />
+            <Route path="/withdraw-history" element={user ? <WithdrawHistory /> : <Navigate to="/login" />} />
             <Route path="/facebook-sell" element={user ? <SellPage type="Facebook" /> : <Navigate to="/login" />} />
             <Route path="/telegram-sell" element={user ? <SellPage type="Telegram" /> : <Navigate to="/login" />} />
             <Route path="/instagram-sell" element={user ? <SellPage type="Instagram" /> : <Navigate to="/login" />} />

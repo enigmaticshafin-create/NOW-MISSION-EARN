@@ -70,7 +70,9 @@ export interface Withdrawal {
   status: 'pending' | 'completed' | 'rejected';
   method: string;
   paymentNumber: string;
-  requestedAt: string;
+  requestedAt?: string;
+  submittedAt: string;
+  rejectionReason?: string;
 }
 
 export interface DepositRequest {
