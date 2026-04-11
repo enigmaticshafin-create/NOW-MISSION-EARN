@@ -7,8 +7,10 @@ import {
   ShieldCheck, AlertCircle, Clock, CheckCircle2, TrendingUp, 
   UserPlus, Ban, Search, Filter, ArrowUpRight, History, Trash2, Edit3, ExternalLink, DollarSign, Settings as SettingsIcon, Save,
   Gift, Award, ArrowDownCircle, ArrowUpCircle, Copy, XCircle, Share2, Smartphone, ShieldAlert, Loader2, Zap,
-  Facebook, Instagram, Send, MessageCircle, Mail
+  Facebook, Instagram, Send, MessageCircle, Mail, Video
 } from 'lucide-react';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { storage } from '../firebase';
 import { cn } from '../lib/utils';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../hooks/useAuth';
@@ -52,6 +54,14 @@ export function AdminPanel() {
     telegramDisabledReason: 'Telegram selling is temporarily off.',
     gmailDisabledReason: '',
     adminPassword: 'password123',
+    facebookPassword: 'password123',
+    instagramPassword: 'password123',
+    telegramPassword: 'password123',
+    gmailPassword: 'password123',
+    facebookVideoUrl: '',
+    instagramVideoUrl: '',
+    telegramVideoUrl: '',
+    gmailVideoUrl: '',
     telegramSupport: ''
   });
   const [dynamicSettings, setDynamicSettings] = useState<DynamicSettings>({
@@ -81,6 +91,7 @@ export function AdminPanel() {
     status: 'active' as UserProfile['status']
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploadingVideo, setIsUploadingVideo] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   useEffect(() => {
@@ -355,6 +366,36 @@ export function AdminPanel() {
       handleFirestoreError(error, OperationType.UPDATE, 'settings/socialSell');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>, platform: 'facebook' | 'instagram' | 'gmail' | 'telegram') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Check file size (limit to 50MB for example)
+    if (file.size > 50 * 1024 * 1024) {
+      alert('Video size must be less than 50MB');
+      return;
+    }
+
+    setIsUploadingVideo(platform);
+    try {
+      const storageRef = ref(storage, `tutorials/${platform}_${Date.now()}_${file.name}`);
+      const snapshot = await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      
+      setSocialSellSettings(prev => ({
+        ...prev,
+        [`${platform}VideoUrl`]: downloadURL
+      }));
+      
+      alert('Video uploaded successfully!');
+    } catch (error) {
+      console.error('Error uploading video:', error);
+      alert('Failed to upload video. Please try again.');
+    } finally {
+      setIsUploadingVideo(null);
     }
   };
 
@@ -2187,6 +2228,35 @@ export function AdminPanel() {
                             theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-white border-slate-200"
                           )}
                         />
+                        <div className="flex gap-2">
+                          <input 
+                            value={socialSellSettings.facebookVideoUrl || ''}
+                            onChange={e => setSocialSellSettings({...socialSellSettings, facebookVideoUrl: e.target.value})}
+                            placeholder="Tutorial Video URL"
+                            className={cn(
+                              "flex-1 rounded-xl p-3 text-[10px] font-bold border outline-none focus:border-pink-500",
+                              theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-white border-slate-200"
+                            )}
+                          />
+                          <label className={cn(
+                            "p-3 rounded-xl border cursor-pointer hover:bg-pink-500/10 transition-all flex items-center justify-center",
+                            theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-white border-slate-200",
+                            isUploadingVideo === 'facebook' && "opacity-50 cursor-not-allowed"
+                          )}>
+                            {isUploadingVideo === 'facebook' ? (
+                              <Loader2 className="w-4 h-4 animate-spin text-pink-500" />
+                            ) : (
+                              <Video className="w-4 h-4 text-pink-500" />
+                            )}
+                            <input 
+                              type="file" 
+                              accept="video/*" 
+                              className="hidden" 
+                              onChange={(e) => handleVideoUpload(e, 'facebook')}
+                              disabled={isUploadingVideo === 'facebook'}
+                            />
+                          </label>
+                        </div>
                         {!socialSellSettings.facebookEnabled && (
                           <input 
                             value={socialSellSettings.facebookDisabledReason}
@@ -2227,6 +2297,35 @@ export function AdminPanel() {
                             theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-white border-slate-200"
                           )}
                         />
+                        <div className="flex gap-2">
+                          <input 
+                            value={socialSellSettings.instagramVideoUrl || ''}
+                            onChange={e => setSocialSellSettings({...socialSellSettings, instagramVideoUrl: e.target.value})}
+                            placeholder="Tutorial Video URL"
+                            className={cn(
+                              "flex-1 rounded-xl p-3 text-[10px] font-bold border outline-none focus:border-pink-500",
+                              theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-white border-slate-200"
+                            )}
+                          />
+                          <label className={cn(
+                            "p-3 rounded-xl border cursor-pointer hover:bg-pink-500/10 transition-all flex items-center justify-center",
+                            theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-white border-slate-200",
+                            isUploadingVideo === 'instagram' && "opacity-50 cursor-not-allowed"
+                          )}>
+                            {isUploadingVideo === 'instagram' ? (
+                              <Loader2 className="w-4 h-4 animate-spin text-pink-500" />
+                            ) : (
+                              <Video className="w-4 h-4 text-pink-500" />
+                            )}
+                            <input 
+                              type="file" 
+                              accept="video/*" 
+                              className="hidden" 
+                              onChange={(e) => handleVideoUpload(e, 'instagram')}
+                              disabled={isUploadingVideo === 'instagram'}
+                            />
+                          </label>
+                        </div>
                         {!socialSellSettings.instagramEnabled && (
                           <input 
                             value={socialSellSettings.instagramDisabledReason}
@@ -2267,6 +2366,35 @@ export function AdminPanel() {
                             theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-white border-slate-200"
                           )}
                         />
+                        <div className="flex gap-2">
+                          <input 
+                            value={socialSellSettings.gmailVideoUrl || ''}
+                            onChange={e => setSocialSellSettings({...socialSellSettings, gmailVideoUrl: e.target.value})}
+                            placeholder="Tutorial Video URL"
+                            className={cn(
+                              "flex-1 rounded-xl p-3 text-[10px] font-bold border outline-none focus:border-pink-500",
+                              theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-white border-slate-200"
+                            )}
+                          />
+                          <label className={cn(
+                            "p-3 rounded-xl border cursor-pointer hover:bg-pink-500/10 transition-all flex items-center justify-center",
+                            theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-white border-slate-200",
+                            isUploadingVideo === 'gmail' && "opacity-50 cursor-not-allowed"
+                          )}>
+                            {isUploadingVideo === 'gmail' ? (
+                              <Loader2 className="w-4 h-4 animate-spin text-pink-500" />
+                            ) : (
+                              <Video className="w-4 h-4 text-pink-500" />
+                            )}
+                            <input 
+                              type="file" 
+                              accept="video/*" 
+                              className="hidden" 
+                              onChange={(e) => handleVideoUpload(e, 'gmail')}
+                              disabled={isUploadingVideo === 'gmail'}
+                            />
+                          </label>
+                        </div>
                         {!socialSellSettings.gmailEnabled && (
                           <input 
                             value={socialSellSettings.gmailDisabledReason}
@@ -2307,6 +2435,35 @@ export function AdminPanel() {
                             theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-white border-slate-200"
                           )}
                         />
+                        <div className="flex gap-2">
+                          <input 
+                            value={socialSellSettings.telegramVideoUrl || ''}
+                            onChange={e => setSocialSellSettings({...socialSellSettings, telegramVideoUrl: e.target.value})}
+                            placeholder="Tutorial Video URL"
+                            className={cn(
+                              "flex-1 rounded-xl p-3 text-[10px] font-bold border outline-none focus:border-pink-500",
+                              theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-white border-slate-200"
+                            )}
+                          />
+                          <label className={cn(
+                            "p-3 rounded-xl border cursor-pointer hover:bg-pink-500/10 transition-all flex items-center justify-center",
+                            theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-white border-slate-200",
+                            isUploadingVideo === 'telegram' && "opacity-50 cursor-not-allowed"
+                          )}>
+                            {isUploadingVideo === 'telegram' ? (
+                              <Loader2 className="w-4 h-4 animate-spin text-pink-500" />
+                            ) : (
+                              <Video className="w-4 h-4 text-pink-500" />
+                            )}
+                            <input 
+                              type="file" 
+                              accept="video/*" 
+                              className="hidden" 
+                              onChange={(e) => handleVideoUpload(e, 'telegram')}
+                              disabled={isUploadingVideo === 'telegram'}
+                            />
+                          </label>
+                        </div>
                         {!socialSellSettings.telegramEnabled && (
                           <input 
                             value={socialSellSettings.telegramDisabledReason}
@@ -2321,13 +2478,61 @@ export function AdminPanel() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                       <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Global Password (for Social Sells)</label>
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Global Password</label>
                         <input 
                           value={socialSellSettings.adminPassword}
                           onChange={e => setSocialSellSettings({...socialSellSettings, adminPassword: e.target.value})}
-                          placeholder="Enter password for users to use"
+                          placeholder="Global password"
+                          className={cn(
+                            "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500",
+                            theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
+                          )}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Facebook Password</label>
+                        <input 
+                          value={socialSellSettings.facebookPassword || ''}
+                          onChange={e => setSocialSellSettings({...socialSellSettings, facebookPassword: e.target.value})}
+                          placeholder="Facebook specific password"
+                          className={cn(
+                            "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500",
+                            theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
+                          )}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Instagram Password</label>
+                        <input 
+                          value={socialSellSettings.instagramPassword || ''}
+                          onChange={e => setSocialSellSettings({...socialSellSettings, instagramPassword: e.target.value})}
+                          placeholder="Instagram specific password"
+                          className={cn(
+                            "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500",
+                            theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
+                          )}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Gmail Password</label>
+                        <input 
+                          value={socialSellSettings.gmailPassword || ''}
+                          onChange={e => setSocialSellSettings({...socialSellSettings, gmailPassword: e.target.value})}
+                          placeholder="Gmail specific password"
+                          className={cn(
+                            "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500",
+                            theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"
+                          )}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Telegram Password</label>
+                        <input 
+                          value={socialSellSettings.telegramPassword || ''}
+                          onChange={e => setSocialSellSettings({...socialSellSettings, telegramPassword: e.target.value})}
+                          placeholder="Telegram specific password"
                           className={cn(
                             "w-full rounded-2xl p-4 text-sm font-bold border outline-none focus:border-pink-500",
                             theme === 'dark' ? "bg-[#0a0b14] border-[#303456]" : "bg-slate-50 border-slate-200"

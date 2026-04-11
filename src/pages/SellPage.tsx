@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../context/ThemeContext';
-import { Facebook, Send, Instagram, Mail, CheckCircle2, AlertCircle, Loader2, ChevronRight, ShieldCheck, Copy } from 'lucide-react';
+import { Facebook, Send, Instagram, Mail, CheckCircle2, AlertCircle, Loader2, ChevronRight, ShieldCheck, Copy, Play, X as CloseIcon } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../hooks/useAuth';
 import { db, auth } from '../firebase';
@@ -19,6 +19,8 @@ export default function SellPage({ type }: SellPageProps) {
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [settings, setSettings] = useState<SocialSellSettings | null>(null);
   
+  const [showVideo, setShowVideo] = useState(false);
+  
   // Specific fields based on type
   const [form, setForm] = useState({
     email: '',
@@ -35,17 +37,22 @@ export default function SellPage({ type }: SellPageProps) {
         if (snap.exists()) {
           const data = snap.data() as SocialSellSettings;
           setSettings(data);
-          // Pre-fill password if available
-          if (data.adminPassword) {
-            setForm(prev => ({ ...prev, password: data.adminPassword || '' }));
-          }
+          
+          // Determine the correct password for this platform
+          let platformPassword = data.adminPassword || '';
+          if (type === 'Facebook' && data.facebookPassword) platformPassword = data.facebookPassword;
+          if (type === 'Instagram' && data.instagramPassword) platformPassword = data.instagramPassword;
+          if (type === 'Gmail' && data.gmailPassword) platformPassword = data.gmailPassword;
+          if (type === 'Telegram' && data.telegramPassword) platformPassword = data.telegramPassword;
+
+          setForm(prev => ({ ...prev, password: platformPassword }));
         }
       } catch (error) {
         console.error('Error fetching social sell settings:', error);
       }
     };
     fetchSettings();
-  }, []);
+  }, [type]);
 
   const icons = {
     Facebook: Facebook,
@@ -82,6 +89,21 @@ export default function SellPage({ type }: SellPageProps) {
     type === 'Instagram' ? settings.instagramDisabledReason :
     type === 'Gmail' ? settings.gmailDisabledReason :
     settings.telegramDisabledReason
+  ) : '';
+
+  const videoUrl = settings ? (
+    type === 'Facebook' ? settings.facebookVideoUrl :
+    type === 'Instagram' ? settings.instagramVideoUrl :
+    type === 'Gmail' ? settings.gmailVideoUrl :
+    settings.telegramVideoUrl
+  ) : '';
+
+  const currentPlatformPassword = settings ? (
+    (type === 'Facebook' && settings.facebookPassword) ? settings.facebookPassword :
+    (type === 'Instagram' && settings.instagramPassword) ? settings.instagramPassword :
+    (type === 'Gmail' && settings.gmailPassword) ? settings.gmailPassword :
+    (type === 'Telegram' && settings.telegramPassword) ? settings.telegramPassword :
+    settings.adminPassword
   ) : '';
 
   if (profile?.status !== 'active') {
@@ -208,9 +230,16 @@ export default function SellPage({ type }: SellPageProps) {
         await addDoc(collection(db, 'socialSells'), submissionData);
         setMessage({ type: 'success', text: 'Your sell request has been submitted for review! (আপনার বিক্রয় অনুরোধটি পর্যালোচনার জন্য জমা দেওয়া হয়েছে!)' });
       }
+      // Determine the correct password for this platform to reset form correctly
+      let platformPassword = settings?.adminPassword || '';
+      if (type === 'Facebook' && settings?.facebookPassword) platformPassword = settings.facebookPassword;
+      if (type === 'Instagram' && settings?.instagramPassword) platformPassword = settings.instagramPassword;
+      if (type === 'Gmail' && settings?.gmailPassword) platformPassword = settings.gmailPassword;
+      if (type === 'Telegram' && settings?.telegramPassword) platformPassword = settings.telegramPassword;
+
       setForm({
         email: '',
-        password: settings?.adminPassword || '',
+        password: platformPassword,
         twoFactor: '',
         name: '',
         username: '',
@@ -235,27 +264,60 @@ export default function SellPage({ type }: SellPageProps) {
 
   return (
     <div className="max-w-2xl mx-auto space-y-8 pt-8 pb-20 px-4">
-      <div className="flex items-center gap-4">
-        <div className={cn("w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg", colors[type])}>
-          <Icon className="w-8 h-8 text-white" />
+        <div className="flex items-center gap-4">
+          <div className={cn("w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg", colors[type])}>
+            <Icon className="w-8 h-8 text-white" />
+          </div>
+          <div className="flex-1">
+            <h2 className="text-3xl font-black tracking-tight italic uppercase">{type} Sell</h2>
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Price: <span className="text-pink-500">{currentPrice} BDT</span></p>
+          </div>
+          {videoUrl && (
+            <button 
+              onClick={() => setShowVideo(true)}
+              className="flex flex-col items-center gap-1 group"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-rose-500 flex items-center justify-center shadow-lg shadow-rose-500/20 group-hover:scale-110 transition-all">
+                <Play className="w-6 h-6 text-white fill-current" />
+              </div>
+              <span className="text-[8px] font-black uppercase tracking-widest text-slate-500">Tutorial</span>
+            </button>
+          )}
         </div>
-        <div>
-          <h2 className="text-3xl font-black tracking-tight italic uppercase">{type} Sell</h2>
-          <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Price: <span className="text-pink-500">{currentPrice} BDT</span></p>
-        </div>
-      </div>
+
+        {showVideo && videoUrl && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-in fade-in duration-300">
+            <div className="relative w-full max-w-4xl aspect-video bg-black rounded-[2.5rem] overflow-hidden border border-white/10 shadow-2xl">
+              <button 
+                onClick={() => setShowVideo(false)}
+                className="absolute top-4 right-4 z-10 p-2 bg-black/50 hover:bg-rose-500 text-white rounded-full transition-all"
+              >
+                <CloseIcon className="w-6 h-6" />
+              </button>
+              <iframe 
+                src={videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be') 
+                  ? `https://www.youtube.com/embed/${videoUrl.split('v=')[1]?.split('&')[0] || videoUrl.split('/').pop()}`
+                  : videoUrl
+                }
+                className="w-full h-full"
+                allowFullScreen
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              />
+            </div>
+          </div>
+        )}
 
       <div className={cn(
         "rounded-[2.5rem] p-8 border space-y-6",
         theme === 'dark' ? "bg-[#1a1c2e] border-[#303456]" : "bg-white border-slate-200"
       )}>
-        {settings?.adminPassword && (
+        {currentPlatformPassword && (
           <div className="p-6 rounded-3xl bg-pink-500/5 border border-pink-500/10 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Required Password</span>
               <button 
                 onClick={() => {
-                  navigator.clipboard.writeText(settings.adminPassword!);
+                  navigator.clipboard.writeText(currentPlatformPassword);
                   setMessage({ type: 'success', text: 'Password copied!' });
                 }}
                 className="flex items-center gap-2 text-pink-500 hover:scale-105 transition-all"
@@ -264,7 +326,7 @@ export default function SellPage({ type }: SellPageProps) {
                 <span className="text-[10px] font-black uppercase tracking-widest">Copy</span>
               </button>
             </div>
-            <div className="text-2xl font-black tracking-tight text-pink-500">{settings.adminPassword}</div>
+            <div className="text-2xl font-black tracking-tight text-pink-500">{currentPlatformPassword}</div>
             <p className="text-[10px] font-bold text-slate-500 leading-relaxed italic">
               * এই পাসওয়ার্ডটি ব্যবহার করে আপনার অ্যাকাউন্টটি সেটআপ করুন। অন্য কোনো পাসওয়ার্ড গ্রহণ করা হবে না।
             </p>

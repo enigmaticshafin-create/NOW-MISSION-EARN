@@ -165,6 +165,14 @@ export interface SocialSellSettings {
   telegramDisabledReason?: string;
   gmailDisabledReason?: string;
   adminPassword?: string;
+  facebookPassword?: string;
+  instagramPassword?: string;
+  telegramPassword?: string;
+  gmailPassword?: string;
+  facebookVideoUrl?: string;
+  instagramVideoUrl?: string;
+  telegramVideoUrl?: string;
+  gmailVideoUrl?: string;
   telegramSupport: string;
 }
 
